@@ -1,89 +1,160 @@
-# Firebase 設定指南
+# 🔥 Firebase 設定完整指南
 
-## 🔥 如何設定 Firebase
+## 步驟 1：創建 Firebase 專案
 
-### 步驟 1：創建 Firebase 專案
-1. 前往 [Firebase Console](https://console.firebase.google.com/)
-2. 點擊「建立專案」
-3. 輸入專案名稱（例如：my-wallet-app）
-4. 依照指示完成專案設定
+### 1.1 前往 Firebase Console
+- 開啟瀏覽器，前往：https://console.firebase.google.com/
+- 使用您的 Google 帳號登入
 
-### 步驟 2：啟用驗證功能
-1. 在 Firebase 控制台左側選單點擊「Authentication」
-2. 點擊「開始使用」
-3. 進入「Sign-in method」頁籤
-4. 啟用「Google」登入方式
-5. 輸入您的專案支援電子郵件地址
+### 1.2 建立新專案
+1. 點擊「建立專案」或「新增專案」
+2. 輸入專案名稱：`my-wallet-app`（或您喜歡的名稱）
+3. 專案 ID 會自動產生，例如：`my-wallet-app-12345`
+4. 選擇是否啟用 Google Analytics（建議啟用）
+5. 如果啟用 Analytics，選擇或創建 Analytics 帳戶
+6. 點擊「建立專案」並等待完成
 
-### 步驟 3：設定 Firestore 資料庫
-1. 在左側選單點擊「Firestore Database」
-2. 點擊「建立資料庫」
-3. 選擇「以測試模式啟動」（稍後可以調整安全規則）
-4. 選擇資料庫位置（建議選擇 asia-east1）
+## 步驟 2：設定 Web 應用程式
 
-### 步驟 4：獲取專案配置
-1. 點擊專案設定（齒輪圖示）
-2. 向下捲動到「您的應用程式」區段
-3. 點擊「Web 應用程式」圖示 (</>)
-4. 註冊應用程式名稱
-5. 複製提供的配置物件
+### 2.1 註冊 Web 應用程式
+1. 在專案概覽頁面，點擊「Web」圖示（</>）
+2. 輸入應用程式暱稱：`錢包管理 App`
+3. 勾選「同時為此應用程式設定 Firebase Hosting」（可選）
+4. 點擊「註冊應用程式」
 
-### 步驟 5：更新程式碼
-將您的 Firebase 配置貼到 `index.html` 中：
-
-```html
+### 2.2 取得配置代碼
+註冊完成後，會顯示類似以下的配置代碼：
+```javascript
 const firebaseConfig = {
-    apiKey: "您的-api-key",
-    authDomain: "您的專案.firebaseapp.com",
-    projectId: "您的專案-id",
-    storageBucket: "您的專案.appspot.com",
-    messagingSenderId: "您的-sender-id",
-    appId: "您的-app-id"
+  apiKey: "AIzaSyC...",
+  authDomain: "my-wallet-app-12345.firebaseapp.com",
+  projectId: "my-wallet-app-12345",
+  storageBucket: "my-wallet-app-12345.appspot.com",
+  messagingSenderId: "123456789",
+  appId: "1:123456789:web:abcdef123456"
 };
 ```
+**重要：複製這段配置代碼，稍後需要使用！**
 
-### 步驟 6：設定 Firestore 安全規則（重要！）
-1. 在 Firestore Database 中點擊「規則」頁籤
-2. 將規則更新為：
+## 步驟 3：啟用 Authentication（驗證）
 
+### 3.1 設定 Authentication
+1. 在左側選單點擊「Authentication」
+2. 點擊「開始使用」
+3. 切換到「Sign-in method」頁籤
+
+### 3.2 啟用 Google 登入
+1. 在提供者清單中找到「Google」
+2. 點擊「Google」進入設定
+3. 切換「啟用」開關
+4. 設定專案的公開名稱：`我的錢包管理`
+5. 輸入專案支援電子郵件（您的 Gmail 地址）
+6. 點擊「儲存」
+
+### 3.3 設定授權網域
+1. 在 Authentication 設定中找到「授權網域」
+2. 預設會包含 localhost 和您的 Firebase 網域
+3. 新增您的 GitHub Pages 網域：`hotdogcat0228.github.io`
+4. 點擊「新增網域」並輸入完整網域
+
+## 步驟 4：設定 Firestore Database
+
+### 4.1 建立 Firestore 資料庫
+1. 在左側選單點擊「Firestore Database」
+2. 點擊「建立資料庫」
+3. 選擇「以測試模式啟動」
+4. 選擇資料庫位置，建議選擇：
+   - `asia-east1` (台灣)
+   - `asia-northeast1` (日本)
+   - `asia-southeast1` (新加坡)
+5. 點擊「完成」
+
+### 4.2 設定安全規則
+1. 在 Firestore 中點擊「規則」頁籤
+2. 將預設規則替換為以下內容：
 ```javascript
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // 允許用戶只能存取自己的錢包資料
+    // 允許已驗證使用者存取自己的錢包資料
     match /users/{userId}/wallets/{walletId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+    
+    // 允許使用者建立自己的使用者文件
+    match /users/{userId} {
       allow read, write: if request.auth != null && request.auth.uid == userId;
     }
   }
 }
 ```
+3. 點擊「發布」
 
-## 🌐 啟用 GitHub Pages 的 Firebase 功能
+## 步驟 5：更新程式碼配置
 
-### 設定授權域名
-1. 在 Firebase Console 中進入「Authentication」
-2. 點擊「Settings」頁籤
-3. 在「授權網域」區段點擊「新增網域」
-4. 添加您的 GitHub Pages 網域：`您的用戶名.github.io`
+### 5.1 替換 Firebase 配置
+將步驟 2.2 取得的配置代碼替換到 `index.html` 中的：
+```javascript
+// 找到這個區塊並替換
+const firebaseConfig = {
+  // 將您的實際配置貼在這裡
+};
+```
 
-## 🚀 完成！
+### 5.2 測試配置
+1. 儲存檔案
+2. 用瀏覽器開啟 `index.html`
+3. 檢查瀏覽器開發者工具的 Console 是否有錯誤訊息
 
-設定完成後，您的程式將具備以下功能：
-- ✅ Google 帳號登入
-- ✅ 雲端同步錢包資料
-- ✅ 多裝置存取
-- ✅ 即時資料更新
+## 步驟 6：部署與測試
 
-## 🔒 安全注意事項
+### 6.1 推送到 GitHub
+```bash
+git add .
+git commit -m "更新 Firebase 專案配置"
+git push
+```
 
-1. **永遠不要將 Firebase API 金鑰推送到公開的 GitHub repository**
-2. **正確設定 Firestore 安全規則**
-3. **定期檢查 Firebase 使用量**
+### 6.2 測試功能
+1. 前往您的 GitHub Pages 網址：
+   `https://hotdogcat0228.github.io/accounting/`
+2. 點擊「Google 登入」
+3. 測試建立錢包、存取資料等功能
 
-## 💡 測試建議
+## � 安全檢查清單
 
-在正式上線前，建議：
-1. 在不同裝置上測試登入功能
-2. 測試錢包資料的同步
-3. 確認離線時的行為
-4. 檢查網路連線中斷後的資料恢復
+- ✅ Firebase 專案已建立
+- ✅ Authentication 已啟用 Google 登入
+- ✅ Firestore 資料庫已建立
+- ✅ 安全規則已設定
+- ✅ 授權網域已設定
+- ✅ 配置代碼已更新
+- ✅ 功能測試通過
+
+## � 常見問題
+
+### Q1: 登入時出現「unauthorized_client」錯誤
+**A:** 檢查 Authentication 設定中的授權網域是否包含您的網站網域
+
+### Q2: 無法讀取/寫入 Firestore 資料
+**A:** 檢查 Firestore 安全規則是否正確設定
+
+### Q3: Firebase 配置錯誤
+**A:** 確認配置代碼中的專案 ID、API Key 等資訊是否正確
+
+### Q4: 本地測試正常但線上版本有問題
+**A:** 檢查授權網域是否包含 GitHub Pages 網域
+
+## 💡 最佳實踐
+
+1. **定期備份資料**：考慮定期導出 Firestore 資料
+2. **監控使用量**：定期檢查 Firebase 使用量避免超出免費額度
+3. **安全規則測試**：使用 Firebase Console 的規則模擬器測試安全規則
+4. **錯誤監控**：啟用 Firebase Crashlytics 監控應用程式錯誤
+
+## � 需要協助？
+
+如果您在設定過程中遇到問題：
+1. 檢查 Firebase Console 中的狀態
+2. 查看瀏覽器開發者工具的 Console 錯誤訊息
+3. 確認所有步驟都已正確完成

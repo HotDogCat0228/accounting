@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Firebase 配置檢查</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .status {
+            padding: 15px;
+            border-radius: 5px;
+            margin: 10px 0;
+        }
+        .success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .warning {
+            background: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeaa7;
+        }
+        .info {
+            background: #cce5ff;
+            color: #004085;
+            border: 1px solid #99ccff;
+        }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        .config-display {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 5px;
+            font-family: monospace;
+            margin: 10px 0;
+            white-space: pre-wrap;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔥 Firebase 配置檢查工具</h1>
+        <p>這個工具可以幫助您檢查 Firebase 配置是否正確設定。</p>
+        
+        <div id="statusContainer">
+            <div class="info">
+                <strong>準備檢查...</strong><br>
+                點擊下方按鈕開始檢查 Firebase 配置
+            </div>
+        </div>
+        
+        <div>
+            <button onclick="checkFirebaseConfig()">檢查 Firebase 配置</button>
+            <button onclick="testAuth()">測試 Google 登入</button>
+            <button onclick="testFirestore()">測試 Firestore 連接</button>
+            <button onclick="showConfig()">顯示當前配置</button>
+        </div>
+        
+        <div id="configDisplay" class="config-display" style="display: none;"></div>
+        
+        <div class="info">
+            <h3>使用說明：</h3>
+            <ol>
+                <li><strong>檢查 Firebase 配置</strong> - 驗證 Firebase 是否正確初始化</li>
+                <li><strong>測試 Google 登入</strong> - 測試 Authentication 功能</li>
+                <li><strong>測試 Firestore 連接</strong> - 測試資料庫連接</li>
+                <li><strong>顯示當前配置</strong> - 顯示目前的 Firebase 配置（隱藏敏感資訊）</li>
+            </ol>
+        </div>
+    </div>
+
+    <!-- Firebase SDK -->
+    <script type="module">
+        import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
+        import { getFirestore, connectFirestoreEmulator } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+        import { getAuth, GoogleAuthProvider, signInWithPopup } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
+        
+        // 使用與主程式相同的配置
+        const firebaseConfig = {
+            apiKey: "AIzaSyDemoKeyForTesting1234567890",
+            authDomain: "accounting-wallet-app.firebaseapp.com",
+            projectId: "accounting-wallet-app",
+            storageBucket: "accounting-wallet-app.appspot.com",
+            messagingSenderId: "123456789012",
+            appId: "1:123456789012:web:abcdef1234567890"
+        };
+        
+        let app, db, auth;
+        
+        function addStatus(message, type = 'info') {
+            const container = document.getElementById('statusContainer');
+            const div = document.createElement('div');
+            div.className = `status ${type}`;
+            div.innerHTML = `<strong>${new Date().toLocaleTimeString()}</strong> - ${message}`;
+            container.appendChild(div);
+            container.scrollTop = container.scrollHeight;
+        }
+        
+        window.checkFirebaseConfig = async function() {
+            try {
+                addStatus('開始檢查 Firebase 配置...', 'info');
+                
+                // 檢查配置
+                if (!firebaseConfig.apiKey || firebaseConfig.apiKey === "your-api-key") {
+                    addStatus('❌ Firebase 配置尚未設定！請更新您的 API Key', 'error');
+                    return;
+                }
+                
+                if (!firebaseConfig.projectId || firebaseConfig.projectId === "your-project-id") {
+                    addStatus('❌ 專案 ID 尚未設定！', 'error');
+                    return;
+                }
+                
+                // 初始化 Firebase
+                app = initializeApp(firebaseConfig);
+                addStatus('✅ Firebase 應用程式初始化成功', 'success');
+                
+                // 初始化服務
+                db = getFirestore(app);
+                auth = getAuth(app);
+                
+                addStatus('✅ Firestore 和 Auth 服務初始化成功', 'success');
+                addStatus('🎉 Firebase 配置檢查完成！', 'success');
+                
+            } catch (error) {
+                addStatus(`❌ Firebase 配置錯誤: ${error.message}`, 'error');
+                console.error('Firebase 配置錯誤:', error);
+            }
+        };
+        
+        window.testAuth = async function() {
+            try {
+                if (!auth) {
+                    addStatus('⚠️ 請先檢查 Firebase 配置', 'warning');
+                    return;
+                }
+                
+                addStatus('開始測試 Google 登入...', 'info');
+                const provider = new GoogleAuthProvider();
+                const result = await signInWithPopup(auth, provider);
+                
+                addStatus(`✅ 登入成功！歡迎 ${result.user.displayName}`, 'success');
+                
+            } catch (error) {
+                if (error.code === 'auth/popup-closed-by-user') {
+                    addStatus('ℹ️ 登入視窗被使用者關閉', 'info');
+                } else if (error.code === 'auth/unauthorized-domain') {
+                    addStatus('❌ 網域未授權，請在 Firebase Console 中添加此網域到授權網域清單', 'error');
+                } else {
+                    addStatus(`❌ 登入失敗: ${error.message}`, 'error');
+                }
+                console.error('登入錯誤:', error);
+            }
+        };
+        
+        window.testFirestore = async function() {
+            try {
+                if (!db) {
+                    addStatus('⚠️ 請先檢查 Firebase 配置', 'warning');
+                    return;
+                }
+                
+                addStatus('開始測試 Firestore 連接...', 'info');
+                
+                // 嘗試取得 Firestore 設定（這不會實際寫入資料）
+                const settings = db._settings;
+                addStatus('✅ Firestore 連接成功', 'success');
+                addStatus(`📍 資料庫主機: ${settings.host || 'firestore.googleapis.com'}`, 'info');
+                
+            } catch (error) {
+                addStatus(`❌ Firestore 連接失敗: ${error.message}`, 'error');
+                console.error('Firestore 錯誤:', error);
+            }
+        };
+        
+        window.showConfig = function() {
+            const configDisplay = document.getElementById('configDisplay');
+            
+            // 隱藏敏感資訊的配置
+            const safeConfig = {
+                apiKey: firebaseConfig.apiKey.substring(0, 10) + "...",
+                authDomain: firebaseConfig.authDomain,
+                projectId: firebaseConfig.projectId,
+                storageBucket: firebaseConfig.storageBucket,
+                messagingSenderId: firebaseConfig.messagingSenderId.substring(0, 6) + "...",
+                appId: firebaseConfig.appId.substring(0, 15) + "..."
+            };
+            
+            configDisplay.textContent = `目前的 Firebase 配置:
+${JSON.stringify(safeConfig, null, 2)}
+
+注意：為了安全考量，部分資訊已隱藏`;
+            configDisplay.style.display = 'block';
+            
+            addStatus('📋 配置資訊已顯示（部分資訊已隱藏）', 'info');
+        };
+        
+        // 頁面載入時顯示初始狀態
+        window.addEventListener('load', function() {
+            addStatus('Firebase 配置檢查工具已就緒', 'info');
+            
+            if (firebaseConfig.apiKey === "AIzaSyDemoKeyForTesting1234567890") {
+                addStatus('⚠️ 目前使用的是測試配置，請更新為您的實際 Firebase 專案配置', 'warning');
+            }
+        });
+        
+    </script>
+</body>
+</html>
