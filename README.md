@@ -2,6 +2,12 @@
 
 這是一個簡單易用的錢包管理和記帳程式，幫助您更好地管理財務和存錢目標。
 
+## 🌐 線上體驗
+您可以直接訪問：[https://hotdogcat0228.github.io/accounting/](https://hotdogcat0228.github.io/accounting/)
+
+## 📸 預覽截圖
+![程式預覽](https://via.placeholder.com/800x600/667eea/ffffff?text=存錢記帳程式預覽)
+
 ## ✨ 功能特色
 
 ### 🎯 多錢包管理
