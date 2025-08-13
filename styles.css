@@ -18,6 +18,48 @@ body {
     padding: 20px;
 }
 
+/* 登入狀態列樣式 */
+.auth-container {
+    background: rgba(255, 255, 255, 0.1);
+    padding: 15px;
+    border-radius: 15px;
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    margin-bottom: 20px;
+    text-align: center;
+}
+
+.login-section p {
+    color: white;
+    margin-bottom: 10px;
+    font-size: 1.1rem;
+}
+
+.user-section {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.user-info {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: white;
+}
+
+.user-avatar {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    border: 2px solid white;
+}
+
+#userName {
+    font-size: 1.1rem;
+    font-weight: 600;
+}
+
 /* 頭部樣式 */
 header {
     display: flex;
@@ -311,6 +353,20 @@ h1 {
 @media (max-width: 768px) {
     .container {
         padding: 15px;
+    }
+    
+    .auth-container {
+        margin-bottom: 15px;
+    }
+    
+    .user-section {
+        flex-direction: column;
+        gap: 15px;
+        text-align: center;
+    }
+    
+    .user-info {
+        justify-content: center;
     }
     
     header {

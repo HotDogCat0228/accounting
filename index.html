@@ -5,9 +5,47 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>存錢記帳程式</title>
     <link rel="stylesheet" href="styles.css">
+    
+    <!-- Firebase SDK -->
+    <script type="module">
+        import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
+        import { getFirestore } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+        import { getAuth } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
+        
+        // Firebase 配置 (需要替換為您的配置)
+        const firebaseConfig = {
+            // 稍後需要填入您的 Firebase 專案配置
+            apiKey: "your-api-key",
+            authDomain: "your-project.firebaseapp.com",
+            projectId: "your-project-id",
+            storageBucket: "your-project.appspot.com",
+            messagingSenderId: "123456789",
+            appId: "your-app-id"
+        };
+        
+        // 初始化 Firebase
+        window.firebaseApp = initializeApp(firebaseConfig);
+        window.db = getFirestore(window.firebaseApp);
+        window.auth = getAuth(window.firebaseApp);
+    </script>
 </head>
 <body>
     <div class="container">
+        <!-- 登入狀態列 -->
+        <div id="authContainer" class="auth-container">
+            <div id="loginSection" class="login-section">
+                <p>請登入以同步您的錢包資料</p>
+                <button id="loginBtn" class="btn btn-primary">Google 登入</button>
+            </div>
+            <div id="userSection" class="user-section" style="display: none;">
+                <div class="user-info">
+                    <img id="userAvatar" class="user-avatar" src="" alt="用戶頭像">
+                    <span id="userName">用戶名稱</span>
+                </div>
+                <button id="logoutBtn" class="btn btn-secondary">登出</button>
+            </div>
+        </div>
+        
         <header>
             <h1>💰 我的錢包管理</h1>
             <button id="addWalletBtn" class="add-wallet-btn">+ 新增錢包</button>
@@ -96,6 +134,6 @@
         </div>
     </div>
 
-    <script src="script.js"></script>
+    <script src="firebase-script.js"></script>
 </body>
 </html>
