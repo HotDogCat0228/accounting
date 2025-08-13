@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>測試頁面</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            padding: 50px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        .container {
+            background: rgba(255,255,255,0.1);
+            padding: 30px;
+            border-radius: 20px;
+            max-width: 500px;
+            margin: 0 auto;
+        }
+        a {
+            color: #fff;
+            text-decoration: none;
+            background: rgba(255,255,255,0.2);
+            padding: 10px 20px;
+            border-radius: 10px;
+            display: inline-block;
+            margin: 10px;
+        }
+        a:hover {
+            background: rgba(255,255,255,0.3);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎉 GitHub Pages 測試成功！</h1>
+        <p>如果您看到這個頁面，表示 GitHub Pages 正在正常運作。</p>
+        <p><strong>當前時間：</strong><span id="time"></span></p>
+        
+        <div>
+            <a href="index.html">前往主程式</a>
+            <a href="firebase-test.html">Firebase 測試工具</a>
+        </div>
+        
+        <h3>📋 檢查清單</h3>
+        <div style="text-align: left; max-width: 400px; margin: 20px auto;">
+            <p>✅ GitHub Pages 部署成功</p>
+            <p>✅ 檔案可以正常存取</p>
+            <p>⏳ Firebase 功能測試中...</p>
+        </div>
+    </div>
+    
+    <script>
+        // 顯示當前時間
+        document.getElementById('time').textContent = new Date().toLocaleString('zh-TW');
+        
+        // 每秒更新時間
+        setInterval(() => {
+            document.getElementById('time').textContent = new Date().toLocaleString('zh-TW');
+        }, 1000);
+    </script>
+</body>
+</html>
