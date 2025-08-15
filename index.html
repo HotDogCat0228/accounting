@@ -4,6 +4,24 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>存錢記帳程式</title>
+    
+    <!-- PWA Meta Tags -->
+    <meta name="description" content="智能存錢記帳程式，幫助您管理財務目標和追蹤收支紀錄">
+    <meta name="theme-color" content="#667eea">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="錢包管理">
+    <meta name="msapplication-TileColor" content="#667eea">
+    
+    <!-- PWA Manifest -->
+    <link rel="manifest" href="manifest.json">
+    
+    <!-- Favicon and App Icons -->
+    <link rel="icon" type="image/x-icon" href="favicon.ico">
+    <link rel="apple-touch-icon" sizes="180x180" href="icons/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="icons/favicon-16x16.png">
+    
     <link rel="stylesheet" href="styles.css">
     
     <!-- Firebase SDK -->
@@ -171,7 +189,66 @@
             </div>
         </div>
     </div>
+    
+    <script type="module" src="firebase-script.js"></script>
+    <script>
+        // 註冊 Service Worker
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', function() {
+                navigator.serviceWorker.register('/accounting/service-worker.js')
+                    .then(function(registration) {
+                        console.log('ServiceWorker 註冊成功：', registration.scope);
+                        
+                        // 檢查是否有更新
+                        registration.addEventListener('updatefound', () => {
+                            const newWorker = registration.installing;
+                            newWorker.addEventListener('statechange', () => {
+                                if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                                    // 提醒用戶有新版本可用
+                                    if (confirm('發現新版本，是否要重新載入？')) {
+                                        window.location.reload();
+                                    }
+                                }
+                            });
+                        });
+                    }, function(err) {
+                        console.log('ServiceWorker 註冊失敗：', err);
+                    });
+            });
+        }
 
-    <script src="firebase-script.js"></script>
+        // PWA 安裝提示
+        let deferredPrompt;
+        const installButton = document.createElement('button');
+        installButton.textContent = '安裝應用程式';
+        installButton.style.display = 'none';
+        installButton.className = 'install-button';
+        
+        window.addEventListener('beforeinstallprompt', (e) => {
+            // 防止默認的安裝提示
+            e.preventDefault();
+            deferredPrompt = e;
+            
+            // 顯示自定義安裝按鈕
+            installButton.style.display = 'block';
+            document.querySelector('.auth-container').appendChild(installButton);
+        });
+
+        installButton.addEventListener('click', async () => {
+            if (deferredPrompt) {
+                deferredPrompt.prompt();
+                const { outcome } = await deferredPrompt.userChoice;
+                console.log(`用戶選擇: ${outcome}`);
+                deferredPrompt = null;
+                installButton.style.display = 'none';
+            }
+        });
+
+        // 檢測 PWA 是否已安裝
+        window.addEventListener('appinstalled', (evt) => {
+            console.log('PWA 已安裝');
+            installButton.style.display = 'none';
+        });
+    </script>
 </body>
 </html>

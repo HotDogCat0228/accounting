@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PWA 功能測試</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            line-height: 1.6;
+        }
+        .test-container {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 30px;
+            border-radius: 15px;
+            backdrop-filter: blur(10px);
+        }
+        .test-item {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 20px;
+            margin: 15px 0;
+            border-radius: 10px;
+            border-left: 4px solid #28a745;
+        }
+        .status {
+            display: inline-block;
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: bold;
+            margin-left: 10px;
+        }
+        .status.pass { background: #28a745; }
+        .status.fail { background: #dc3545; }
+        .status.pending { background: #ffc107; color: #000; }
+        
+        button {
+            background: #28a745;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+            transition: all 0.3s ease;
+        }
+        button:hover {
+            background: #20c997;
+            transform: translateY(-2px);
+        }
+        
+        .info-box {
+            background: rgba(255, 255, 255, 0.2);
+            padding: 15px;
+            border-radius: 10px;
+            margin: 20px 0;
+        }
+        
+        h1, h2 {
+            text-align: center;
+        }
+        
+        .back-link {
+            text-align: center;
+            margin: 30px 0;
+        }
+        
+        .back-link a {
+            color: white;
+            text-decoration: none;
+            padding: 15px 30px;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 25px;
+            transition: all 0.3s ease;
+        }
+        
+        .back-link a:hover {
+            background: rgba(255, 255, 255, 0.3);
+            transform: translateY(-2px);
+        }
+    </style>
+</head>
+<body>
+    <div class="test-container">
+        <h1>📱 PWA 功能測試</h1>
+        
+        <div class="back-link">
+            <a href="index.html">← 返回錢包應用</a>
+        </div>
+        
+        <div class="info-box">
+            <strong>使用說明：</strong><br>
+            這個頁面會檢測您的錢包管理應用程式是否正確設置了 PWA 功能。在手機上開啟此頁面以獲得最佳測試結果。
+        </div>
+        
+        <h2>🔍 PWA 功能檢測</h2>
+        
+        <div class="test-item">
+            <strong>Service Worker 支援</strong>
+            <span id="swSupport" class="status pending">檢測中...</span>
+            <div id="swInfo" style="margin-top: 10px; font-size: 14px;"></div>
+        </div>
+        
+        <div class="test-item">
+            <strong>Service Worker 註冊狀態</strong>
+            <span id="swRegistration" class="status pending">檢測中...</span>
+            <div id="swRegInfo" style="margin-top: 10px; font-size: 14px;"></div>
+        </div>
+        
+        <div class="test-item">
+            <strong>Web App Manifest</strong>
+            <span id="manifestSupport" class="status pending">檢測中...</span>
+            <div id="manifestInfo" style="margin-top: 10px; font-size: 14px;"></div>
+        </div>
+        
+        <div class="test-item">
+            <strong>安裝提示支援</strong>
+            <span id="installSupport" class="status pending">檢測中...</span>
+            <div id="installInfo" style="margin-top: 10px; font-size: 14px;"></div>
+            <button id="triggerInstall" style="display: none;">觸發安裝提示</button>
+        </div>
+        
+        <div class="test-item">
+            <strong>離線功能</strong>
+            <span id="offlineSupport" class="status pending">檢測中...</span>
+            <div id="offlineInfo" style="margin-top: 10px; font-size: 14px;"></div>
+            <button onclick="testOffline()">測試離線功能</button>
+        </div>
+        
+        <div class="test-item">
+            <strong>快取功能</strong>
+            <span id="cacheSupport" class="status pending">檢測中...</span>
+            <div id="cacheInfo" style="margin-top: 10px; font-size: 14px;"></div>
+        </div>
+        
+        <div class="test-item">
+            <strong>推播通知支援</strong>
+            <span id="notificationSupport" class="status pending">檢測中...</span>
+            <div id="notificationInfo" style="margin-top: 10px; font-size: 14px;"></div>
+            <button onclick="testNotification()">測試通知</button>
+        </div>
+        
+        <div class="test-item">
+            <strong>顯示模式</strong>
+            <span id="displayMode" class="status pending">檢測中...</span>
+            <div id="displayInfo" style="margin-top: 10px; font-size: 14px;"></div>
+        </div>
+        
+        <h2>🚀 測試結果總覽</h2>
+        <div id="summary" class="info-box">
+            <div id="summaryText">正在執行測試...</div>
+            <div id="recommendations" style="margin-top: 15px;"></div>
+        </div>
+        
+        <div style="text-align: center; margin: 30px 0;">
+            <button onclick="runAllTests()">重新執行所有測試</button>
+            <button onclick="copyResults()">複製測試結果</button>
+        </div>
+    </div>
+
+    <script>
+        let testResults = {};
+        let deferredPrompt;
+
+        // 執行所有測試
+        function runAllTests() {
+            testServiceWorkerSupport();
+            testServiceWorkerRegistration();
+            testManifest();
+            testInstallPrompt();
+            testOfflineCapabilities();
+            testCacheAPI();
+            testNotifications();
+            testDisplayMode();
+            
+            setTimeout(updateSummary, 2000);
+        }
+
+        // 測試 Service Worker 支援
+        function testServiceWorkerSupport() {
+            const support = 'serviceWorker' in navigator;
+            updateTestResult('swSupport', support, 
+                support ? 'Service Worker API 可用' : 'Service Worker API 不支援');
+        }
+
+        // 測試 Service Worker 註冊
+        function testServiceWorkerRegistration() {
+            if ('serviceWorker' in navigator) {
+                navigator.serviceWorker.getRegistration('/accounting/')
+                    .then(registration => {
+                        const registered = !!registration;
+                        updateTestResult('swRegistration', registered,
+                            registered ? `Service Worker 已註冊：${registration.scope}` : 'Service Worker 未註冊');
+                        
+                        if (registered) {
+                            document.getElementById('swRegInfo').innerHTML += `<br>狀態：${registration.active ? '運行中' : '未啟動'}`;
+                        }
+                    })
+                    .catch(err => {
+                        updateTestResult('swRegistration', false, `註冊檢查失敗：${err.message}`);
+                    });
+            } else {
+                updateTestResult('swRegistration', false, 'Service Worker 不支援');
+            }
+        }
+
+        // 測試 Web App Manifest
+        function testManifest() {
+            fetch('/accounting/manifest.json')
+                .then(response => {
+                    const success = response.ok;
+                    updateTestResult('manifestSupport', success,
+                        success ? 'Manifest 檔案載入成功' : `Manifest 載入失敗：${response.status}`);
+                    
+                    if (success) {
+                        return response.json();
+                    }
+                })
+                .then(manifest => {
+                    if (manifest) {
+                        document.getElementById('manifestInfo').innerHTML += 
+                            `<br>應用名稱：${manifest.name}<br>主題色彩：${manifest.theme_color}<br>顯示模式：${manifest.display}`;
+                    }
+                })
+                .catch(err => {
+                    updateTestResult('manifestSupport', false, `Manifest 錯誤：${err.message}`);
+                });
+        }
+
+        // 測試安裝提示
+        function testInstallPrompt() {
+            window.addEventListener('beforeinstallprompt', (e) => {
+                e.preventDefault();
+                deferredPrompt = e;
+                updateTestResult('installSupport', true, '安裝提示可用');
+                document.getElementById('triggerInstall').style.display = 'inline-block';
+            });
+
+            // 檢查是否已安裝
+            if (window.matchMedia('(display-mode: standalone)').matches) {
+                updateTestResult('installSupport', true, '應用程式已安裝為 PWA');
+            } else {
+                setTimeout(() => {
+                    if (!deferredPrompt) {
+                        updateTestResult('installSupport', false, '安裝提示不可用（可能已安裝或不支援）');
+                    }
+                }, 3000);
+            }
+        }
+
+        // 觸發安裝
+        document.getElementById('triggerInstall').onclick = async () => {
+            if (deferredPrompt) {
+                deferredPrompt.prompt();
+                const { outcome } = await deferredPrompt.userChoice;
+                document.getElementById('installInfo').innerHTML += `<br>用戶選擇：${outcome}`;
+                deferredPrompt = null;
+                document.getElementById('triggerInstall').style.display = 'none';
+            }
+        };
+
+        // 測試離線功能
+        function testOfflineCapabilities() {
+            const onlineStatus = navigator.onLine;
+            updateTestResult('offlineSupport', true, 
+                `網路狀態：${onlineStatus ? '線上' : '離線'}`);
+            
+            // 監聽網路狀態變化
+            window.addEventListener('online', () => {
+                document.getElementById('offlineInfo').innerHTML += '<br>網路已連接';
+            });
+            
+            window.addEventListener('offline', () => {
+                document.getElementById('offlineInfo').innerHTML += '<br>網路已斷線';
+            });
+        }
+
+        // 測試離線功能
+        function testOffline() {
+            // 嘗試載入一個不存在的資源來模擬離線狀態
+            fetch('/accounting/test-offline-' + Date.now())
+                .then(() => {
+                    document.getElementById('offlineInfo').innerHTML += '<br>測試：網路連線正常';
+                })
+                .catch(() => {
+                    document.getElementById('offlineInfo').innerHTML += '<br>測試：離線狀態模擬成功';
+                });
+        }
+
+        // 測試快取 API
+        function testCacheAPI() {
+            const support = 'caches' in window;
+            updateTestResult('cacheSupport', support,
+                support ? 'Cache API 可用' : 'Cache API 不支援');
+            
+            if (support) {
+                caches.keys().then(cacheNames => {
+                    document.getElementById('cacheInfo').innerHTML += 
+                        `<br>快取數量：${cacheNames.length}<br>快取名稱：${cacheNames.join(', ') || '無'}`;
+                });
+            }
+        }
+
+        // 測試推播通知
+        function testNotifications() {
+            const support = 'Notification' in window;
+            updateTestResult('notificationSupport', support,
+                support ? `通知支援：${Notification.permission}` : '不支援通知');
+        }
+
+        // 測試通知
+        function testNotification() {
+            if ('Notification' in window) {
+                if (Notification.permission === 'granted') {
+                    new Notification('PWA 測試', {
+                        body: '通知功能測試成功！',
+                        icon: '/accounting/icons/icon-192x192.png'
+                    });
+                } else if (Notification.permission !== 'denied') {
+                    Notification.requestPermission().then(permission => {
+                        if (permission === 'granted') {
+                            new Notification('PWA 測試', {
+                                body: '通知權限已獲得！',
+                                icon: '/accounting/icons/icon-192x192.png'
+                            });
+                        }
+                        document.getElementById('notificationInfo').innerHTML += 
+                            `<br>權限狀態：${permission}`;
+                    });
+                }
+            }
+        }
+
+        // 測試顯示模式
+        function testDisplayMode() {
+            const isStandalone = window.matchMedia('(display-mode: standalone)').matches;
+            const isFullscreen = window.matchMedia('(display-mode: fullscreen)').matches;
+            const isMinimalUI = window.matchMedia('(display-mode: minimal-ui)').matches;
+            
+            let mode = 'browser';
+            if (isStandalone) mode = 'standalone';
+            if (isFullscreen) mode = 'fullscreen';
+            if (isMinimalUI) mode = 'minimal-ui';
+            
+            updateTestResult('displayMode', true, `目前顯示模式：${mode}`);
+            
+            // 檢查 iOS Safari
+            const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+            const isInStandaloneMode = ('standalone' in window.navigator) && (window.navigator.standalone);
+            
+            if (isIOS) {
+                document.getElementById('displayInfo').innerHTML += 
+                    `<br>iOS 獨立模式：${isInStandaloneMode ? '是' : '否'}`;
+            }
+        }
+
+        // 更新測試結果
+        function updateTestResult(elementId, passed, message) {
+            const element = document.getElementById(elementId);
+            element.className = `status ${passed ? 'pass' : 'fail'}`;
+            element.textContent = passed ? '通過' : '失敗';
+            
+            const infoElement = document.getElementById(elementId.replace('Support', 'Info').replace('Mode', 'Info'));
+            if (infoElement) {
+                infoElement.innerHTML = message;
+            }
+            
+            testResults[elementId] = { passed, message };
+        }
+
+        // 更新總覽
+        function updateSummary() {
+            const results = Object.values(testResults);
+            const passed = results.filter(r => r.passed).length;
+            const total = results.length;
+            
+            document.getElementById('summaryText').innerHTML = 
+                `測試完成：${passed}/${total} 項通過 (${Math.round(passed/total*100)}%)`;
+            
+            const recommendations = [];
+            if (!testResults.swSupport?.passed) {
+                recommendations.push('• 升級瀏覽器以支援 Service Worker');
+            }
+            if (!testResults.swRegistration?.passed) {
+                recommendations.push('• 檢查 Service Worker 註冊程式碼');
+            }
+            if (!testResults.manifestSupport?.passed) {
+                recommendations.push('• 確認 manifest.json 檔案存在且格式正確');
+            }
+            
+            if (recommendations.length > 0) {
+                document.getElementById('recommendations').innerHTML = 
+                    '<strong>建議改進：</strong><br>' + recommendations.join('<br>');
+            } else if (passed === total) {
+                document.getElementById('recommendations').innerHTML = 
+                    '<strong style="color: #28a745;">🎉 所有 PWA 功能運作正常！</strong>';
+            }
+        }
+
+        // 複製測試結果
+        function copyResults() {
+            const results = Object.entries(testResults)
+                .map(([key, result]) => `${key}: ${result.passed ? '通過' : '失敗'} - ${result.message}`)
+                .join('\n');
+            
+            navigator.clipboard.writeText(results).then(() => {
+                alert('測試結果已複製到剪貼簿！');
+            }).catch(() => {
+                // 備用方法
+                const textArea = document.createElement('textarea');
+                textArea.value = results;
+                document.body.appendChild(textArea);
+                textArea.select();
+                document.execCommand('copy');
+                document.body.removeChild(textArea);
+                alert('測試結果已複製到剪貼簿！');
+            });
+        }
+
+        // 頁面載入時執行所有測試
+        window.onload = runAllTests;
+    </script>
+</body>
+</html>
