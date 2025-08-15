@@ -399,4 +399,184 @@ h1 {
     .modal-footer {
         flex-direction: column;
     }
+    
+    .transaction-list {
+        max-height: 250px;
+    }
+    
+    .transaction-filters {
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+    
+    .filter-btn {
+        flex: 1;
+        min-width: 80px;
+    }
+}
+
+/* 交易紀錄相關樣式 */
+.transaction-summary {
+    background: linear-gradient(135deg, #f8f9fa, #e9ecef);
+    padding: 20px;
+    border-radius: 10px;
+    margin-bottom: 20px;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 15px;
+}
+
+.summary-item {
+    text-align: center;
+}
+
+.summary-label {
+    display: block;
+    font-size: 0.9rem;
+    color: #666;
+    margin-bottom: 5px;
+}
+
+.summary-value {
+    display: block;
+    font-size: 1.2rem;
+    font-weight: bold;
+}
+
+.summary-value.positive {
+    color: #28a745;
+}
+
+.summary-value.negative {
+    color: #dc3545;
+}
+
+.transaction-filters {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 20px;
+    justify-content: center;
+}
+
+.filter-btn {
+    padding: 8px 16px;
+    border: 2px solid #e9ecef;
+    background: white;
+    border-radius: 20px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    font-weight: 600;
+}
+
+.filter-btn.active,
+.filter-btn:hover {
+    background: linear-gradient(45deg, #007bff, #0056b3);
+    color: white;
+    border-color: #007bff;
+}
+
+.transaction-list {
+    max-height: 400px;
+    overflow-y: auto;
+    border: 1px solid #e9ecef;
+    border-radius: 8px;
+    background: #fafafa;
+}
+
+.transaction-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 15px;
+    border-bottom: 1px solid #e9ecef;
+    transition: background-color 0.2s ease;
+}
+
+.transaction-item:hover {
+    background-color: #f8f9fa;
+}
+
+.transaction-item:last-child {
+    border-bottom: none;
+}
+
+.transaction-item.deposit {
+    border-left: 4px solid #28a745;
+}
+
+.transaction-item.withdrawal {
+    border-left: 4px solid #dc3545;
+}
+
+.transaction-info {
+    flex: 1;
+}
+
+.transaction-type {
+    font-weight: bold;
+    margin-bottom: 2px;
+}
+
+.transaction-type.deposit {
+    color: #28a745;
+}
+
+.transaction-type.withdrawal {
+    color: #dc3545;
+}
+
+.transaction-note {
+    font-size: 0.9rem;
+    color: #666;
+    margin-bottom: 2px;
+}
+
+.transaction-date {
+    font-size: 0.8rem;
+    color: #999;
+}
+
+.transaction-amount {
+    font-weight: bold;
+    font-size: 1.1rem;
+    text-align: right;
+}
+
+.transaction-amount.positive {
+    color: #28a745;
+}
+
+.transaction-amount.negative {
+    color: #dc3545;
+}
+
+.transaction-balance {
+    font-size: 0.8rem;
+    color: #666;
+    text-align: right;
+    margin-top: 2px;
+}
+
+.empty-transactions {
+    text-align: center;
+    padding: 40px 20px;
+    color: #666;
+}
+
+.empty-transactions h4 {
+    margin-bottom: 10px;
+    color: #999;
+}
+
+/* 三個按鈕的錢包動作列 */
+.wallet-actions-extended {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 8px;
+    margin-top: 20px;
+}
+
+.btn-info {
+    background: linear-gradient(45deg, #17a2b8, #138496);
+    color: white;
 }

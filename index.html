@@ -132,6 +132,44 @@
                 </div>
             </div>
         </div>
+
+        <!-- 交易紀錄的彈出視窗 -->
+        <div id="transactionHistoryModal" class="modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2 id="historyTitle">交易紀錄</h2>
+                    <span class="close">&times;</span>
+                </div>
+                <div class="modal-body">
+                    <div class="transaction-summary">
+                        <div class="summary-item">
+                            <span class="summary-label">總存入：</span>
+                            <span id="totalDeposits" class="summary-value positive">NT$ 0</span>
+                        </div>
+                        <div class="summary-item">
+                            <span class="summary-label">總提取：</span>
+                            <span id="totalWithdrawals" class="summary-value negative">NT$ 0</span>
+                        </div>
+                        <div class="summary-item">
+                            <span class="summary-label">交易筆數：</span>
+                            <span id="totalTransactions" class="summary-value">0 筆</span>
+                        </div>
+                    </div>
+                    <div class="transaction-filters">
+                        <button id="filterAll" class="filter-btn active">全部</button>
+                        <button id="filterDeposits" class="filter-btn">存入</button>
+                        <button id="filterWithdrawals" class="filter-btn">提取</button>
+                    </div>
+                    <div id="transactionList" class="transaction-list">
+                        <!-- 交易紀錄會在這裡顯示 -->
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button id="exportTransactions" class="btn btn-secondary">匯出紀錄</button>
+                    <button id="closeHistoryBtn" class="btn btn-primary">關閉</button>
+                </div>
+            </div>
+        </div>
     </div>
 
     <script src="firebase-script.js"></script>

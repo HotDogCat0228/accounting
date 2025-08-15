@@ -4,6 +4,7 @@ class WalletManager {
         this.wallets = this.loadWallets();
         this.currentEditingWallet = null;
         this.currentTransactionWallet = null;
+        this.currentViewingWallet = null;
         this.transactionType = null;
         this.init();
     }
@@ -55,6 +56,28 @@ class WalletManager {
 
         document.getElementById('deleteWalletBtn').addEventListener('click', () => {
             this.deleteWallet();
+        });
+
+        // 交易紀錄相關事件
+        document.getElementById('closeHistoryBtn').addEventListener('click', () => {
+            this.hideTransactionHistory();
+        });
+
+        document.getElementById('exportTransactions').addEventListener('click', () => {
+            this.exportTransactionHistory();
+        });
+
+        // 交易紀錄篩選器
+        document.getElementById('filterAll').addEventListener('click', () => {
+            this.filterTransactions('all');
+        });
+
+        document.getElementById('filterDeposits').addEventListener('click', () => {
+            this.filterTransactions('add');
+        });
+
+        document.getElementById('filterWithdrawals').addEventListener('click', () => {
+            this.filterTransactions('subtract');
         });
 
         // 關閉按鈕事件
@@ -164,12 +187,15 @@ class WalletManager {
             </div>
             <div class="wallet-amount">${this.formatCurrency(wallet.amount)}</div>
             ${goalHtml}
-            <div class="wallet-actions">
+            <div class="wallet-actions-extended">
                 <button class="btn btn-success" onclick="walletManager.showTransactionModal('${wallet.id}', 'add')">
                     ➕ 存入
                 </button>
                 <button class="btn btn-danger" onclick="walletManager.showTransactionModal('${wallet.id}', 'subtract')">
                     ➖ 提取
+                </button>
+                <button class="btn btn-info" onclick="walletManager.showTransactionHistory('${wallet.id}')">
+                    📊 紀錄
                 </button>
             </div>
         `;
@@ -368,6 +394,167 @@ class WalletManager {
             
             this.showNotification(`錢包「${wallet.name}」已刪除`, 'info');
         }
+    }
+
+    // 顯示交易紀錄
+    showTransactionHistory(walletId) {
+        this.currentViewingWallet = walletId;
+        const wallet = this.wallets.find(w => w.id === walletId);
+        
+        if (!wallet) return;
+        
+        document.getElementById('historyTitle').textContent = `${wallet.name} - 交易紀錄`;
+        
+        // 計算統計資訊
+        const transactions = wallet.transactions || [];
+        let totalDeposits = 0;
+        let totalWithdrawals = 0;
+        
+        transactions.forEach(transaction => {
+            if (transaction.type === 'add') {
+                totalDeposits += transaction.amount;
+            } else {
+                totalWithdrawals += transaction.amount;
+            }
+        });
+        
+        document.getElementById('totalDeposits').textContent = this.formatCurrency(totalDeposits);
+        document.getElementById('totalWithdrawals').textContent = this.formatCurrency(totalWithdrawals);
+        document.getElementById('totalTransactions').textContent = `${transactions.length} 筆`;
+        
+        // 顯示交易列表
+        this.renderTransactionList(transactions);
+        
+        // 重設篩選器
+        this.setActiveFilter('filterAll');
+        
+        document.getElementById('transactionHistoryModal').style.display = 'block';
+    }
+
+    // 隱藏交易紀錄
+    hideTransactionHistory() {
+        document.getElementById('transactionHistoryModal').style.display = 'none';
+        this.currentViewingWallet = null;
+    }
+
+    // 渲染交易列表
+    renderTransactionList(transactions) {
+        const container = document.getElementById('transactionList');
+        
+        if (!transactions || transactions.length === 0) {
+            container.innerHTML = `
+                <div class="empty-transactions">
+                    <h4>還沒有交易紀錄</h4>
+                    <p>開始使用存入或提取功能來記錄您的交易吧！</p>
+                </div>
+            `;
+            return;
+        }
+        
+        // 按日期排序（最新的在前面）
+        const sortedTransactions = transactions.sort((a, b) => new Date(b.date) - new Date(a.date));
+        
+        container.innerHTML = '';
+        
+        sortedTransactions.forEach(transaction => {
+            const item = this.createTransactionItem(transaction);
+            container.appendChild(item);
+        });
+    }
+
+    // 創建交易項目
+    createTransactionItem(transaction) {
+        const item = document.createElement('div');
+        item.className = `transaction-item ${transaction.type === 'add' ? 'deposit' : 'withdrawal'}`;
+        item.dataset.type = transaction.type;
+        
+        const date = new Date(transaction.date);
+        const formattedDate = date.toLocaleString('zh-TW');
+        
+        const typeText = transaction.type === 'add' ? '存入' : '提取';
+        const amountClass = transaction.type === 'add' ? 'positive' : 'negative';
+        const amountPrefix = transaction.type === 'add' ? '+' : '-';
+        
+        item.innerHTML = `
+            <div class="transaction-info">
+                <div class="transaction-type ${transaction.type === 'add' ? 'deposit' : 'withdrawal'}">
+                    ${typeText}
+                </div>
+                ${transaction.note ? `<div class="transaction-note">${transaction.note}</div>` : ''}
+                <div class="transaction-date">${formattedDate}</div>
+            </div>
+            <div class="transaction-amount-info">
+                <div class="transaction-amount ${amountClass}">
+                    ${amountPrefix}${this.formatCurrency(transaction.amount)}
+                </div>
+                <div class="transaction-balance">
+                    餘額: ${this.formatCurrency(transaction.balance)}
+                </div>
+            </div>
+        `;
+        
+        return item;
+    }
+
+    // 篩選交易紀錄
+    filterTransactions(type) {
+        const wallet = this.wallets.find(w => w.id === this.currentViewingWallet);
+        if (!wallet) return;
+        
+        const transactions = wallet.transactions || [];
+        let filteredTransactions;
+        
+        if (type === 'all') {
+            filteredTransactions = transactions;
+        } else {
+            filteredTransactions = transactions.filter(t => t.type === type);
+        }
+        
+        this.renderTransactionList(filteredTransactions);
+        this.setActiveFilter(`filter${type === 'all' ? 'All' : type === 'add' ? 'Deposits' : 'Withdrawals'}`);
+    }
+
+    // 設定啟用的篩選器
+    setActiveFilter(activeId) {
+        document.querySelectorAll('.filter-btn').forEach(btn => {
+            btn.classList.remove('active');
+        });
+        document.getElementById(activeId).classList.add('active');
+    }
+
+    // 匯出交易紀錄
+    exportTransactionHistory() {
+        const wallet = this.wallets.find(w => w.id === this.currentViewingWallet);
+        if (!wallet || !wallet.transactions) return;
+        
+        const transactions = wallet.transactions.sort((a, b) => new Date(b.date) - new Date(a.date));
+        
+        // 創建 CSV 格式的數據
+        const headers = ['日期', '類型', '金額', '備註', '餘額'];
+        const csvContent = [
+            headers.join(','),
+            ...transactions.map(t => [
+                new Date(t.date).toLocaleString('zh-TW'),
+                t.type === 'add' ? '存入' : '提取',
+                t.amount,
+                t.note || '',
+                t.balance
+            ].map(field => `"${field}"`).join(','))
+        ].join('\n');
+        
+        // 下載檔案
+        const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${wallet.name}-交易紀錄-${new Date().toISOString().split('T')[0]}.csv`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        
+        this.showNotification('交易紀錄已匯出！', 'success');
     }
 
     // 顯示通知訊息
