@@ -1,19 +1,19 @@
 const CACHE_NAME = 'wallet-app-v1.0.0';
 const urlsToCache = [
-  '/accounting/',
-  '/accounting/index.html',
-  '/accounting/styles.css',
-  '/accounting/firebase-script.js',
-  '/accounting/script.js',
-  '/accounting/manifest.json',
+  './',
+  './index.html',
+  './styles.css',
+  './firebase-script.js',
+  './script.js',
+  './manifest.json',
   // Firebase SDK
-  'https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js',
-  'https://www.gstatic.com/firebasejs/9.22.0/firebase-auth.js',
-  'https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js',
+  'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js',
+  'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js',
+  'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js',
   // Icons (will be added later)
-  '/accounting/icons/icon-192x192.png',
-  '/accounting/icons/icon-512x512.png',
-  '/accounting/icons/apple-touch-icon.png'
+  './icons/icon-192x192.png',
+  './icons/icon-512x512.png',
+  './icons/apple-touch-icon.png'
 ];
 
 // 安裝 Service Worker
@@ -90,7 +90,7 @@ self.addEventListener('fetch', function(event) {
           .catch(function() {
             // 網路失敗時的備用處理
             if (event.request.destination === 'document') {
-              return caches.match('/accounting/index.html');
+              return caches.match('./index.html');
             }
           });
       })
@@ -114,11 +114,11 @@ self.addEventListener('push', function(event) {
   
   const options = {
     body: event.data ? event.data.text() : '您有新的財務提醒',
-    icon: '/accounting/icons/icon-192x192.png',
-    badge: '/accounting/icons/icon-72x72.png',
+    icon: './icons/icon-192x192.png',
+    badge: './icons/icon-72x72.png',
     vibrate: [200, 100, 200],
     data: {
-      url: '/accounting/'
+      url: './'
     }
   };
 

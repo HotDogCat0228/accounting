@@ -3,8 +3,8 @@
   "short_name": "錢包管理",
   "description": "智能存錢記帳程式，幫助您管理財務目標和追蹤收支紀錄",
   "version": "1.0.0",
-  "start_url": "/accounting/",
-  "scope": "/accounting/",
+  "start_url": "./",
+  "scope": "./",
   "display": "standalone",
   "background_color": "#667eea",
   "theme_color": "#667eea",
@@ -96,7 +96,7 @@
       "name": "新增錢包",
       "short_name": "新增",
       "description": "快速新增一個新的錢包",
-      "url": "/accounting/?action=add-wallet",
+      "url": "./?action=add-wallet",
       "icons": [
         {
           "src": "icons/shortcut-add.png",
@@ -108,7 +108,7 @@
       "name": "查看統計",
       "short_name": "統計",
       "description": "查看財務統計資料",
-      "url": "/accounting/?action=stats",
+      "url": "./?action=stats",
       "icons": [
         {
           "src": "icons/shortcut-stats.png",

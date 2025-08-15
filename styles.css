@@ -599,3 +599,46 @@ h1 {
     background: linear-gradient(45deg, #17a2b8, #138496);
     color: white;
 }
+
+/* PWA 安裝按鈕樣式 */
+.install-button {
+    background: linear-gradient(135deg, #28a745, #20c997);
+    color: white;
+    border: none;
+    padding: 12px 24px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    margin: 10px auto;
+    display: block;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.install-button:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 12px rgba(0, 0, 0, 0.15);
+    background: linear-gradient(135deg, #20c997, #28a745);
+}
+
+/* PWA 顯示調整 */
+@media (display-mode: standalone) {
+    body {
+        padding-top: env(safe-area-inset-top);
+        padding-bottom: env(safe-area-inset-bottom);
+    }
+    
+    .container {
+        margin-top: 0;
+    }
+}
+
+/* iOS PWA 狀態欄調整 */
+@supports (-webkit-touch-callout: none) {
+    @media (display-mode: standalone) {
+        body {
+            padding-top: 44px; /* iOS 狀態欄高度 */
+        }
+    }
+}
