@@ -176,8 +176,19 @@ class FirebaseWalletManager {
         document.getElementById('loginBtn').addEventListener('click', () => {
             this.loginWithGoogle();
         });
+        
+        // 添加觸控支援
+        document.getElementById('loginBtn').addEventListener('touchend', (e) => {
+            e.preventDefault();
+            this.loginWithGoogle();
+        });
 
         document.getElementById('logoutBtn').addEventListener('click', () => {
+            this.logout();
+        });
+        
+        document.getElementById('logoutBtn').addEventListener('touchend', (e) => {
+            e.preventDefault();
             this.logout();
         });
 
@@ -185,13 +196,28 @@ class FirebaseWalletManager {
         document.getElementById('addWalletBtn').addEventListener('click', () => {
             this.showAddWalletModal();
         });
+        
+        document.getElementById('addWalletBtn').addEventListener('touchend', (e) => {
+            e.preventDefault();
+            this.showAddWalletModal();
+        });
 
         // 新增錢包相關事件
         document.getElementById('saveWalletBtn').addEventListener('click', () => {
             this.saveWallet();
         });
+        
+        document.getElementById('saveWalletBtn').addEventListener('touchend', (e) => {
+            e.preventDefault();
+            this.saveWallet();
+        });
 
         document.getElementById('cancelBtn').addEventListener('click', () => {
+            this.hideAddWalletModal();
+        });
+        
+        document.getElementById('cancelBtn').addEventListener('touchend', (e) => {
+            e.preventDefault();
             this.hideAddWalletModal();
         });
 
@@ -199,8 +225,18 @@ class FirebaseWalletManager {
         document.getElementById('confirmTransactionBtn').addEventListener('click', () => {
             this.processTransaction();
         });
+        
+        document.getElementById('confirmTransactionBtn').addEventListener('touchend', (e) => {
+            e.preventDefault();
+            this.processTransaction();
+        });
 
         document.getElementById('cancelTransactionBtn').addEventListener('click', () => {
+            this.hideTransactionModal();
+        });
+        
+        document.getElementById('cancelTransactionBtn').addEventListener('touchend', (e) => {
+            e.preventDefault();
             this.hideTransactionModal();
         });
 
@@ -208,17 +244,37 @@ class FirebaseWalletManager {
         document.getElementById('saveEditBtn').addEventListener('click', () => {
             this.saveEditWallet();
         });
+        
+        document.getElementById('saveEditBtn').addEventListener('touchend', (e) => {
+            e.preventDefault();
+            this.saveEditWallet();
+        });
 
         document.getElementById('cancelEditBtn').addEventListener('click', () => {
+            this.hideEditWalletModal();
+        });
+        
+        document.getElementById('cancelEditBtn').addEventListener('touchend', (e) => {
+            e.preventDefault();
             this.hideEditWalletModal();
         });
 
         document.getElementById('deleteWalletBtn').addEventListener('click', () => {
             this.deleteWallet();
         });
+        
+        document.getElementById('deleteWalletBtn').addEventListener('touchend', (e) => {
+            e.preventDefault();
+            this.deleteWallet();
+        });
 
         // 交易紀錄相關事件
         document.getElementById('closeHistoryBtn').addEventListener('click', () => {
+            this.hideTransactionHistory();
+        });
+        
+        document.getElementById('closeHistoryBtn').addEventListener('touchend', (e) => {
+            e.preventDefault();
             this.hideTransactionHistory();
         });
 
@@ -245,12 +301,27 @@ class FirebaseWalletManager {
                 const modal = e.target.closest('.modal');
                 modal.style.display = 'none';
             });
+            
+            // 添加觸控支援
+            closeBtn.addEventListener('touchend', (e) => {
+                e.preventDefault();
+                const modal = e.target.closest('.modal');
+                modal.style.display = 'none';
+            });
         });
 
         // 點擊背景關閉彈出視窗
         document.querySelectorAll('.modal').forEach(modal => {
             modal.addEventListener('click', (e) => {
                 if (e.target === modal) {
+                    modal.style.display = 'none';
+                }
+            });
+            
+            // 添加觸控支援
+            modal.addEventListener('touchend', (e) => {
+                if (e.target === modal) {
+                    e.preventDefault();
                     modal.style.display = 'none';
                 }
             });
@@ -333,24 +404,71 @@ class FirebaseWalletManager {
         card.innerHTML = `
             <div class="wallet-header">
                 <h3 class="wallet-name">${wallet.name}</h3>
-                <button class="edit-btn" onclick="firebaseWalletManager.showEditWalletModal('${wallet.id}')">⚙️</button>
+                <button class="edit-btn" data-wallet-id="${wallet.id}" data-action="edit">⚙️</button>
             </div>
             <div class="wallet-amount">${this.formatCurrency(wallet.amount)}</div>
             ${goalHtml}
             <div class="wallet-actions-extended">
-                <button class="btn btn-success" onclick="firebaseWalletManager.showTransactionModal('${wallet.id}', 'add')">
+                <button class="btn btn-success" data-wallet-id="${wallet.id}" data-action="add">
                     ➕ 存入
                 </button>
-                <button class="btn btn-danger" onclick="firebaseWalletManager.showTransactionModal('${wallet.id}', 'subtract')">
+                <button class="btn btn-danger" data-wallet-id="${wallet.id}" data-action="subtract">
                     ➖ 提取
                 </button>
-                <button class="btn btn-info" onclick="firebaseWalletManager.showTransactionHistory('${wallet.id}')">
+                <button class="btn btn-info" data-wallet-id="${wallet.id}" data-action="history">
                     📊 紀錄
                 </button>
             </div>
         `;
+        
+        // 添加事件監聽器
+        this.addWalletCardEvents(card, wallet.id);
 
         return card;
+    }
+    
+    // 添加錢包卡片事件
+    addWalletCardEvents(card, walletId) {
+        const editBtn = card.querySelector('.edit-btn');
+        const addBtn = card.querySelector('[data-action="add"]');
+        const subtractBtn = card.querySelector('[data-action="subtract"]');
+        const historyBtn = card.querySelector('[data-action="history"]');
+        
+        // 編輯按鈕
+        const handleEdit = (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            this.showEditWalletModal(walletId);
+        };
+        editBtn.addEventListener('click', handleEdit);
+        editBtn.addEventListener('touchend', handleEdit);
+        
+        // 存入按鈕
+        const handleAdd = (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            this.showTransactionModal(walletId, 'add');
+        };
+        addBtn.addEventListener('click', handleAdd);
+        addBtn.addEventListener('touchend', handleAdd);
+        
+        // 提取按鈕
+        const handleSubtract = (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            this.showTransactionModal(walletId, 'subtract');
+        };
+        subtractBtn.addEventListener('click', handleSubtract);
+        subtractBtn.addEventListener('touchend', handleSubtract);
+        
+        // 記錄按鈕
+        const handleHistory = (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            this.showTransactionHistory(walletId);
+        };
+        historyBtn.addEventListener('click', handleHistory);
+        historyBtn.addEventListener('touchend', handleHistory);
     }
 
     // 格式化貨幣顯示
