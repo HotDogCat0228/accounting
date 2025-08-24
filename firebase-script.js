@@ -320,8 +320,8 @@ class FirebaseWalletManager {
 
         // 動態導入 Firestore 模組
         import('https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js')
-            .then(({ collection, query, orderBy, onSnapshot, doc, setDoc, updateDoc, deleteDoc, addDoc }) => {
-                window.firestoreModule = { collection, query, orderBy, onSnapshot, doc, setDoc, updateDoc, deleteDoc, addDoc };
+            .then(({ collection, query, orderBy, onSnapshot, doc, setDoc, updateDoc, deleteDoc, addDoc, getDoc }) => {
+                window.firestoreModule = { collection, query, orderBy, onSnapshot, doc, setDoc, updateDoc, deleteDoc, addDoc, getDoc };
                 
                 console.log('Firestore 模組載入成功，設置監聽器...');
                 const walletsRef = collection(window.db, 'users', this.user.uid, 'wallets');
