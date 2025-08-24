@@ -43,6 +43,7 @@
         
         // 初始化 Firebase
         window.firebaseApp = initializeApp(firebaseConfig);
+        window.firebaseConfig = firebaseConfig; // 保存配置供調試使用
         window.db = getFirestore(window.firebaseApp);
         window.auth = getAuth(window.firebaseApp);
     </script>

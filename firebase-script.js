@@ -249,7 +249,10 @@ class FirebaseWalletManager {
 
     // 隱藏用戶資訊區域
     hideUserSection() {
-        document.getElementById('userSection').style.display = 'none';
+        const userSection = document.getElementById('userSection');
+        if (userSection) {
+            userSection.style.display = 'none';
+        }
     }
 
     // 顯示離線區域
@@ -266,17 +269,26 @@ class FirebaseWalletManager {
 
     // 隱藏離線區域
     hideOfflineSection() {
-        document.getElementById('offlineSection').style.display = 'none';
+        const offlineSection = document.getElementById('offlineSection');
+        if (offlineSection) {
+            offlineSection.style.display = 'none';
+        }
     }
 
     // 顯示登入區域
     showLoginSection() {
-        document.getElementById('loginSection').style.display = 'block';
+        const loginSection = document.getElementById('loginSection');
+        if (loginSection) {
+            loginSection.style.display = 'block';
+        }
     }
 
     // 隱藏登入區域
     hideLoginSection() {
-        document.getElementById('loginSection').style.display = 'none';
+        const loginSection = document.getElementById('loginSection');
+        if (loginSection) {
+            loginSection.style.display = 'none';
+        }
     }
 
     // 顯示錢包區域
@@ -343,6 +355,16 @@ class FirebaseWalletManager {
             
             this.updateLoginStatus('Firebase 已就緒，開始登入...');
             
+            // 檢查域名授權
+            const currentDomain = window.location.hostname;
+            const authDomain = window.firebaseConfig?.authDomain;
+            console.log(`當前域名: ${currentDomain}, Firebase Auth域名: ${authDomain}`);
+            
+            if (currentDomain === 'hotdogcat0228.github.io' && authDomain && !authDomain.includes('github.io')) {
+                console.warn('域名可能未授權！');
+                this.updateLoginStatus('警告：域名可能未在 Firebase 中授權');
+            }
+            
             // 檢查是否為移動設備和PWA
             const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
             const isIOS = /iPad|iPhone|iPod/i.test(navigator.userAgent);
@@ -350,6 +372,20 @@ class FirebaseWalletManager {
             const isSafari = /Safari/i.test(navigator.userAgent) && !/Chrome|CriOS|FxiOS|EdgiOS/i.test(navigator.userAgent);
             
             console.log(`設備環境: 手機=${isMobile}, iOS=${isIOS}, PWA=${isPWA}, Safari=${isSafari}`);
+            
+            // 特殊的 iPhone PWA 測試
+            if (isIOS && isPWA) {
+                // 檢查是否能創建 GoogleAuthProvider
+                try {
+                    const testProvider = new GoogleAuthProvider();
+                    console.log('GoogleAuthProvider 創建成功');
+                    this.updateLoginStatus('Google 服務可用，準備登入...');
+                } catch (providerError) {
+                    console.error('無法創建 GoogleAuthProvider:', providerError);
+                    this.updateLoginStatus('Google 服務不可用：' + providerError.message);
+                    throw providerError;
+                }
+            }
             
             const { GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult } = window.authModule;
             const provider = new GoogleAuthProvider();
@@ -366,7 +402,20 @@ class FirebaseWalletManager {
                 // 直接嘗試登入，不要預先警告
                 try {
                     console.log('iPhone PWA 嘗試彈出視窗登入...');
-                    this.updateLoginStatus('打開 Google 登入視窗...');
+                    this.updateLoginStatus('正在打開 Google 登入視窗...');
+                    
+                    // 測試彈出視窗是否被阻擋
+                    const testPopup = window.open('', '_blank', 'width=1,height=1');
+                    if (testPopup) {
+                        testPopup.close();
+                        console.log('彈出視窗測試：允許');
+                    } else {
+                        console.log('彈出視窗測試：被阻擋');
+                        this.updateLoginStatus('彈出視窗被阻擋，使用重定向方式...');
+                        await signInWithRedirect(window.auth, provider);
+                        return;
+                    }
+                    
                     const result = await signInWithPopup(window.auth, provider);
                     
                     if (result && result.user) {
@@ -459,7 +508,13 @@ class FirebaseWalletManager {
             console.error('錯誤代碼:', error.code);
             console.error('錯誤訊息:', error.message);
             console.error('完整錯誤:', error);
+            console.error('當前URL:', window.location.href);
+            console.error('User Agent:', navigator.userAgent);
             console.error('===========================');
+            
+            // 保存錯誤信息供診斷使用
+            localStorage.setItem('lastLoginError', `${error.code}: ${error.message}`);
+            localStorage.setItem('lastLoginTime', new Date().toISOString());
             
             // 如果適合，詢問是否使用離線模式（但不要自動觸發）
             if (shouldOfferOffline) {
@@ -619,6 +674,31 @@ class FirebaseWalletManager {
         // 顯示離線錢包數量
         const offlineWallets = this.loadWalletsFromLocal();
         diagnostics.push(`離線錢包數量: ${offlineWallets.length}`);
+        
+        // 顯示 Firebase 配置信息以供調試
+        diagnostics.push('');
+        diagnostics.push('=== Firebase 配置 ===');
+        diagnostics.push(`項目 ID: ${window.firebaseConfig?.projectId || '未知'}`);
+        diagnostics.push(`Auth 域名: ${window.firebaseConfig?.authDomain || '未知'}`);
+        diagnostics.push(`當前域名: ${window.location.hostname}`);
+        diagnostics.push(`當前完整URL: ${window.location.href}`);
+        
+        // 檢查授權域名狀態
+        if (window.location.hostname === 'hotdogcat0228.github.io') {
+            diagnostics.push(`GitHub Pages 域名: ✅ 已配置`);
+        } else if (window.location.hostname === 'localhost') {
+            diagnostics.push(`本地開發: ✅ 通常允許`);
+        } else {
+            diagnostics.push(`域名狀態: ⚠️  需要檢查授權`);
+        }
+        
+        // 檢查最近的登入錯誤
+        const lastError = localStorage.getItem('lastLoginError');
+        if (lastError) {
+            diagnostics.push('');
+            diagnostics.push('=== 最近登入錯誤 ===');
+            diagnostics.push(`錯誤: ${lastError}`);
+        }
         
         // iPhone PWA 特殊說明
         if (isIPhone && isPWA) {
@@ -1747,13 +1827,27 @@ document.addEventListener('DOMContentLoaded', () => {
         firebaseWalletManager.enableOfflineMode();
     });
     
+    // 診斷按鈕監聽器
+    const diagnosBtn = document.getElementById('diagnosBtn');
+    if (diagnosBtn) {
+        diagnosBtn.addEventListener('click', () => {
+            firebaseWalletManager.showDiagnostics();
+        });
+    }
+    
     // 診斷按鈕監聽器（離線區域中的）
-    document.getElementById('diagnosBtn2').addEventListener('click', () => {
-        firebaseWalletManager.showDiagnostics();
-    });
+    const diagnosBtn2 = document.getElementById('diagnosBtn2');
+    if (diagnosBtn2) {
+        diagnosBtn2.addEventListener('click', () => {
+            firebaseWalletManager.showDiagnostics();
+        });
+    }
     
     // 重新整理按鈕監聽器
-    document.getElementById('refreshBtn').addEventListener('click', () => {
-        firebaseWalletManager.refreshOfflineMode();
-    });
+    const refreshBtn = document.getElementById('refreshBtn');
+    if (refreshBtn) {
+        refreshBtn.addEventListener('click', () => {
+            firebaseWalletManager.refreshOfflineMode();
+        });
+    }
 });
