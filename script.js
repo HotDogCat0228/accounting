@@ -5,6 +5,7 @@ class WalletManager {
         this.currentEditingWallet = null;
         this.currentTransactionWallet = null;
         this.currentViewingWallet = null;
+        this.currentEditingTransaction = null;
         this.transactionType = null;
         this.init();
     }
@@ -58,6 +59,15 @@ class WalletManager {
             this.deleteWallet();
         });
 
+        // 編輯交易相關事件
+        document.getElementById('saveEditTransactionBtn').addEventListener('click', () => {
+            this.saveEditTransaction();
+        });
+
+        document.getElementById('cancelEditTransactionBtn').addEventListener('click', () => {
+            this.hideEditTransactionModal();
+        });
+
         // 交易紀錄相關事件
         document.getElementById('closeHistoryBtn').addEventListener('click', () => {
             this.hideTransactionHistory();
@@ -88,6 +98,17 @@ class WalletManager {
             });
         });
 
+        // 事件委託處理交易編輯和刪除按鈕
+        document.addEventListener('click', (e) => {
+            if (e.target.classList.contains('edit-transaction')) {
+                const transactionId = e.target.getAttribute('data-transaction-id');
+                this.editTransaction(transactionId);
+            } else if (e.target.classList.contains('delete-transaction')) {
+                const transactionId = e.target.getAttribute('data-transaction-id');
+                this.deleteTransaction(transactionId);
+            }
+        });
+
         // 點擊背景關閉彈出視窗
         document.querySelectorAll('.modal').forEach(modal => {
             modal.addEventListener('click', (e) => {
@@ -103,6 +124,7 @@ class WalletManager {
                 const addModal = document.getElementById('addWalletModal');
                 const transactionModal = document.getElementById('transactionModal');
                 const editModal = document.getElementById('editWalletModal');
+                const editTransactionModal = document.getElementById('editTransactionModal');
                 
                 if (addModal.style.display === 'block') {
                     this.saveWallet();
@@ -110,7 +132,21 @@ class WalletManager {
                     this.processTransaction();
                 } else if (editModal.style.display === 'block') {
                     this.saveEditWallet();
+                } else if (editTransactionModal.style.display === 'block') {
+                    this.saveEditTransaction();
                 }
+            } else if (e.key === 'Escape') {
+                // 按 ESC 鍵關閉彈出視窗
+                document.querySelectorAll('.modal').forEach(modal => {
+                    if (modal.style.display === 'block') {
+                        modal.style.display = 'none';
+                        
+                        // 清理狀態
+                        if (modal.id === 'editTransactionModal') {
+                            this.currentEditingTransaction = null;
+                        }
+                    }
+                });
             }
         });
     }
@@ -118,7 +154,20 @@ class WalletManager {
     // 從本地儲存載入錢包數據
     loadWallets() {
         const saved = localStorage.getItem('wallets');
-        return saved ? JSON.parse(saved) : [];
+        const wallets = saved ? JSON.parse(saved) : [];
+        
+        // 遷移舊數據：為沒有ID的交易添加ID
+        wallets.forEach(wallet => {
+            if (wallet.transactions) {
+                wallet.transactions.forEach(transaction => {
+                    if (!transaction.id) {
+                        transaction.id = this.generateId();
+                    }
+                });
+            }
+        });
+        
+        return wallets;
     }
 
     // 儲存錢包數據到本地儲存
@@ -467,6 +516,7 @@ class WalletManager {
         const item = document.createElement('div');
         item.className = `transaction-item ${transaction.type === 'add' ? 'deposit' : 'withdrawal'}`;
         item.dataset.type = transaction.type;
+        item.dataset.transactionId = transaction.id;
         
         const date = new Date(transaction.date);
         const formattedDate = date.toLocaleString('zh-TW');
@@ -490,6 +540,14 @@ class WalletManager {
                 <div class="transaction-balance">
                     餘額: ${this.formatCurrency(transaction.balance)}
                 </div>
+            </div>
+            <div class="transaction-actions">
+                <button class="btn-icon edit-transaction" data-transaction-id="${transaction.id}" title="編輯">
+                    ✏️
+                </button>
+                <button class="btn-icon delete-transaction" data-transaction-id="${transaction.id}" title="刪除">
+                    🗑️
+                </button>
             </div>
         `;
         
@@ -555,6 +613,140 @@ class WalletManager {
         URL.revokeObjectURL(url);
         
         this.showNotification('交易紀錄已匯出！', 'success');
+    }
+
+    // 編輯交易
+    editTransaction(transactionId) {
+        const wallet = this.wallets.find(w => w.id === this.currentViewingWallet);
+        if (!wallet) return;
+        
+        const transaction = wallet.transactions.find(t => t.id === transactionId);
+        if (!transaction) return;
+        
+        // 將交易資料填入編輯表單
+        document.getElementById('editTransactionType').value = transaction.type;
+        document.getElementById('editTransactionAmount').value = transaction.amount;
+        document.getElementById('editTransactionNote').value = transaction.note || '';
+        
+        // 格式化日期時間用於 datetime-local 輸入
+        const date = new Date(transaction.date);
+        const formattedDate = new Date(date.getTime() - (date.getTimezoneOffset() * 60000))
+            .toISOString().slice(0, -1);
+        document.getElementById('editTransactionDate').value = formattedDate;
+        
+        // 記錄正在編輯的交易ID
+        this.currentEditingTransaction = transactionId;
+        
+        // 顯示編輯彈出視窗
+        document.getElementById('editTransactionModal').style.display = 'block';
+    }
+
+    // 儲存編輯後的交易
+    saveEditTransaction() {
+        const type = document.getElementById('editTransactionType').value;
+        const amount = parseFloat(document.getElementById('editTransactionAmount').value);
+        const note = document.getElementById('editTransactionNote').value.trim();
+        const dateStr = document.getElementById('editTransactionDate').value;
+        
+        if (!amount || amount <= 0) {
+            this.showNotification('請輸入有效的金額', 'error');
+            return;
+        }
+        
+        if (!dateStr) {
+            this.showNotification('請選擇日期', 'error');
+            return;
+        }
+        
+        const wallet = this.wallets.find(w => w.id === this.currentViewingWallet);
+        if (!wallet) return;
+        
+        const transactionIndex = wallet.transactions.findIndex(t => t.id === this.currentEditingTransaction);
+        if (transactionIndex === -1) return;
+        
+        const oldTransaction = wallet.transactions[transactionIndex];
+        const newDate = new Date(dateStr);
+        
+        // 更新交易資料
+        wallet.transactions[transactionIndex] = {
+            ...oldTransaction,
+            type: type,
+            amount: amount,
+            note: note,
+            date: newDate.toISOString()
+        };
+        
+        // 重新計算所有交易的餘額
+        this.recalculateBalances(wallet);
+        
+        // 儲存更新
+        this.saveWallets();
+        this.renderWallets();
+        
+        // 更新交易歷史顯示
+        this.showTransactionHistory(this.currentViewingWallet);
+        
+        // 隱藏編輯彈出視窗
+        this.hideEditTransactionModal();
+        
+        this.showNotification('交易已更新！', 'success');
+    }
+
+    // 隱藏編輯交易彈出視窗
+    hideEditTransactionModal() {
+        document.getElementById('editTransactionModal').style.display = 'none';
+        this.currentEditingTransaction = null;
+    }
+
+    // 刪除交易
+    deleteTransaction(transactionId) {
+        if (!confirm('確定要刪除這筆交易嗎？此操作無法撤銷。')) {
+            return;
+        }
+        
+        const wallet = this.wallets.find(w => w.id === this.currentViewingWallet);
+        if (!wallet) return;
+        
+        // 移除交易
+        wallet.transactions = wallet.transactions.filter(t => t.id !== transactionId);
+        
+        // 重新計算所有交易的餘額
+        this.recalculateBalances(wallet);
+        
+        // 儲存更新
+        this.saveWallets();
+        this.renderWallets();
+        
+        // 更新交易歷史顯示
+        this.showTransactionHistory(this.currentViewingWallet);
+        
+        this.showNotification('交易已刪除！', 'success');
+    }
+
+    // 重新計算錢包餘額
+    recalculateBalances(wallet) {
+        if (!wallet.transactions || wallet.transactions.length === 0) {
+            wallet.amount = wallet.initialAmount || 0;
+            return;
+        }
+        
+        // 按日期排序交易
+        wallet.transactions.sort((a, b) => new Date(a.date) - new Date(b.date));
+        
+        let currentBalance = wallet.initialAmount || 0;
+        
+        // 重新計算每筆交易的餘額
+        wallet.transactions.forEach(transaction => {
+            if (transaction.type === 'add') {
+                currentBalance += transaction.amount;
+            } else {
+                currentBalance -= transaction.amount;
+            }
+            transaction.balance = currentBalance;
+        });
+        
+        // 更新錢包當前金額
+        wallet.amount = currentBalance;
     }
 
     // 顯示通知訊息

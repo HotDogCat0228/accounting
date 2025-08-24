@@ -54,6 +54,8 @@
             <div id="loginSection" class="login-section">
                 <p>請登入以同步您的錢包資料</p>
                 <button id="loginBtn" class="btn btn-primary">Google 登入</button>
+                <button id="offlineBtn" class="btn btn-secondary">📱 離線使用</button>
+                <p class="offline-hint">離線模式：資料僅儲存在此裝置上</p>
             </div>
             <div id="userSection" class="user-section" style="display: none;">
                 <div class="user-info">
@@ -185,6 +187,41 @@
                 <div class="modal-footer">
                     <button id="exportTransactions" class="btn btn-secondary">匯出紀錄</button>
                     <button id="closeHistoryBtn" class="btn btn-primary">關閉</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 編輯交易的彈出視窗 -->
+        <div id="editTransactionModal" class="modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2>編輯交易紀錄</h2>
+                    <span class="close">&times;</span>
+                </div>
+                <div class="modal-body">
+                    <div class="input-group">
+                        <label for="editTransactionType">交易類型：</label>
+                        <select id="editTransactionType" class="input-field">
+                            <option value="add">存入</option>
+                            <option value="subtract">提取</option>
+                        </select>
+                    </div>
+                    <div class="input-group">
+                        <label for="editTransactionAmount">金額：</label>
+                        <input type="number" id="editTransactionAmount" class="input-field" min="0.01" step="0.01" placeholder="請輸入金額">
+                    </div>
+                    <div class="input-group">
+                        <label for="editTransactionNote">備註：</label>
+                        <input type="text" id="editTransactionNote" class="input-field" placeholder="請輸入備註（可選）">
+                    </div>
+                    <div class="input-group">
+                        <label for="editTransactionDate">日期：</label>
+                        <input type="datetime-local" id="editTransactionDate" class="input-field">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button id="cancelEditTransactionBtn" class="btn btn-secondary">取消</button>
+                    <button id="saveEditTransactionBtn" class="btn btn-primary">儲存</button>
                 </div>
             </div>
         </div>

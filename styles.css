@@ -40,6 +40,13 @@ body {
     font-size: 1.1rem;
 }
 
+.offline-hint {
+    font-size: 0.9rem !important;
+    opacity: 0.8;
+    margin-top: 10px !important;
+    margin-bottom: 0 !important;
+}
+
 .user-section {
     display: flex;
     justify-content: space-between;
@@ -586,6 +593,7 @@ h1 {
     padding: 15px;
     border-bottom: 1px solid #e9ecef;
     transition: background-color 0.2s ease;
+    position: relative;
 }
 
 .transaction-item:hover {
@@ -606,6 +614,13 @@ h1 {
 
 .transaction-info {
     flex: 1;
+}
+
+.transaction-amount-info {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    margin-right: 10px;
 }
 
 .transaction-type {
@@ -651,6 +666,37 @@ h1 {
     color: #666;
     text-align: right;
     margin-top: 2px;
+}
+
+.transaction-actions {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    margin-left: 15px;
+}
+
+.btn-icon {
+    background: none;
+    border: none;
+    font-size: 1.2rem;
+    padding: 8px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    opacity: 0.7;
+}
+
+.btn-icon:hover {
+    opacity: 1;
+    transform: scale(1.1);
+}
+
+.edit-transaction:hover {
+    background-color: rgba(0, 123, 255, 0.1);
+}
+
+.delete-transaction:hover {
+    background-color: rgba(220, 53, 69, 0.1);
 }
 
 .empty-transactions {

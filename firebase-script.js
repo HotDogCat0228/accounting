@@ -6,12 +6,18 @@ class FirebaseWalletManager {
         this.currentEditingWallet = null;
         this.currentTransactionWallet = null;
         this.currentViewingWallet = null;
+        this.currentEditingTransaction = null;
         this.transactionType = null;
         this.unsubscribe = null;
+        this.isOfflineMode = false;
         
         // 等待 Firebase 初始化完成
         this.waitForFirebase().then(() => {
             this.init();
+        }).catch(() => {
+            // Firebase 初始化失敗，啟用離線模式
+            console.warn('Firebase 初始化失敗，自動切換到離線模式');
+            this.enableOfflineMode();
         });
     }
 
@@ -170,6 +176,55 @@ class FirebaseWalletManager {
         }
     }
 
+    // 啟用離線模式
+    enableOfflineMode() {
+        this.isOfflineMode = true;
+        
+        // 隱藏登入區域
+        document.getElementById('loginSection').style.display = 'none';
+        
+        // 顯示錢包區域
+        this.showWalletSection();
+        
+        // 從本地儲存載入錢包資料
+        this.wallets = this.loadWalletsFromLocal();
+        this.renderWallets();
+        
+        // 顯示離線模式通知
+        this.showNotification('已切換到離線模式', 'info');
+        
+        console.log('已啟用離線模式');
+    }
+
+    // 從本地儲存載入錢包
+    loadWalletsFromLocal() {
+        const saved = localStorage.getItem('wallets');
+        const wallets = saved ? JSON.parse(saved) : [];
+        
+        // 遷移舊數據：為沒有ID的交易添加ID
+        wallets.forEach(wallet => {
+            if (wallet.transactions) {
+                wallet.transactions.forEach(transaction => {
+                    if (!transaction.id) {
+                        transaction.id = this.generateId();
+                    }
+                });
+            }
+        });
+        
+        return wallets;
+    }
+
+    // 儲存錢包到本地儲存
+    saveWalletsToLocal() {
+        localStorage.setItem('wallets', JSON.stringify(this.wallets));
+    }
+
+    // 生成唯一ID
+    generateId() {
+        return Date.now().toString(36) + Math.random().toString(36).substr(2);
+    }
+
     // 綁定事件監聽器
     bindEvents() {
         // 登入登出按鈕
@@ -177,10 +232,20 @@ class FirebaseWalletManager {
             this.loginWithGoogle();
         });
         
+        // 離線模式按鈕
+        document.getElementById('offlineBtn').addEventListener('click', () => {
+            this.enableOfflineMode();
+        });
+        
         // 添加觸控支援
         document.getElementById('loginBtn').addEventListener('touchend', (e) => {
             e.preventDefault();
             this.loginWithGoogle();
+        });
+        
+        document.getElementById('offlineBtn').addEventListener('touchend', (e) => {
+            e.preventDefault();
+            this.enableOfflineMode();
         });
 
         document.getElementById('logoutBtn').addEventListener('click', () => {
@@ -268,6 +333,26 @@ class FirebaseWalletManager {
             this.deleteWallet();
         });
 
+        // 編輯交易相關事件
+        document.getElementById('saveEditTransactionBtn').addEventListener('click', () => {
+            this.saveEditTransaction();
+        });
+
+        document.getElementById('cancelEditTransactionBtn').addEventListener('click', () => {
+            this.hideEditTransactionModal();
+        });
+
+        // 事件委託處理交易編輯和刪除按鈕
+        document.addEventListener('click', (e) => {
+            if (e.target.classList.contains('edit-transaction')) {
+                const transactionId = e.target.getAttribute('data-transaction-id');
+                this.editTransaction(transactionId);
+            } else if (e.target.classList.contains('delete-transaction')) {
+                const transactionId = e.target.getAttribute('data-transaction-id');
+                this.deleteTransaction(transactionId);
+            }
+        });
+
         // 交易紀錄相關事件
         document.getElementById('closeHistoryBtn').addEventListener('click', () => {
             this.hideTransactionHistory();
@@ -333,6 +418,7 @@ class FirebaseWalletManager {
                 const addModal = document.getElementById('addWalletModal');
                 const transactionModal = document.getElementById('transactionModal');
                 const editModal = document.getElementById('editWalletModal');
+                const editTransactionModal = document.getElementById('editTransactionModal');
                 
                 if (addModal.style.display === 'block') {
                     this.saveWallet();
@@ -340,13 +426,22 @@ class FirebaseWalletManager {
                     this.processTransaction();
                 } else if (editModal.style.display === 'block') {
                     this.saveEditWallet();
+                } else if (editTransactionModal.style.display === 'block') {
+                    this.saveEditTransaction();
                 }
             }
             
             // ESC 關閉彈出視窗
             if (e.key === 'Escape') {
                 document.querySelectorAll('.modal').forEach(modal => {
-                    modal.style.display = 'none';
+                    if (modal.style.display === 'block') {
+                        modal.style.display = 'none';
+                        
+                        // 清理狀態
+                        if (modal.id === 'editTransactionModal') {
+                            this.currentEditingTransaction = null;
+                        }
+                    }
                 });
             }
         });
@@ -506,8 +601,8 @@ class FirebaseWalletManager {
             return;
         }
 
-        if (!this.user) {
-            alert('請先登入');
+        if (!this.user && !this.isOfflineMode) {
+            alert('請先登入或使用離線模式');
             return;
         }
 
@@ -522,16 +617,35 @@ class FirebaseWalletManager {
         }
 
         try {
-            const { collection, addDoc } = window.firestoreModule;
-            const walletsRef = collection(window.db, 'users', this.user.uid, 'wallets');
-            
-            await addDoc(walletsRef, {
-                name: name,
-                amount: amount,
-                goal: goal,
-                createdAt: new Date(),
-                transactions: []
-            });
+            if (this.isOfflineMode) {
+                // 離線模式：儲存到本地
+                const newWallet = {
+                    id: this.generateId(),
+                    name: name,
+                    amount: amount,
+                    initialAmount: amount,
+                    goal: goal,
+                    createdAt: new Date().toISOString(),
+                    transactions: []
+                };
+                
+                this.wallets.unshift(newWallet);
+                this.saveWalletsToLocal();
+                this.renderWallets();
+            } else {
+                // 線上模式：儲存到Firebase
+                const { collection, addDoc } = window.firestoreModule;
+                const walletsRef = collection(window.db, 'users', this.user.uid, 'wallets');
+                
+                await addDoc(walletsRef, {
+                    name: name,
+                    amount: amount,
+                    initialAmount: amount,
+                    goal: goal,
+                    createdAt: new Date(),
+                    transactions: []
+                });
+            }
 
             this.hideAddWalletModal();
             this.showNotification(`錢包「${name}」創建成功！`, 'success');
@@ -573,8 +687,8 @@ class FirebaseWalletManager {
             return;
         }
 
-        if (!this.user) {
-            alert('請先登入');
+        if (!this.user && !this.isOfflineMode) {
+            alert('請先登入或使用離線模式');
             return;
         }
 
@@ -595,22 +709,34 @@ class FirebaseWalletManager {
         }
 
         try {
-            const { doc, updateDoc } = window.firestoreModule;
-            const walletRef = doc(window.db, 'users', this.user.uid, 'wallets', wallet.id);
-            
             const transaction = {
-                id: Date.now().toString(),
+                id: this.generateId(),
                 type: this.transactionType,
                 amount: amount,
                 note: note,
-                date: new Date(),
+                date: new Date().toISOString(),
                 balance: newAmount
             };
 
-            await updateDoc(walletRef, {
-                amount: newAmount,
-                transactions: [...(wallet.transactions || []), transaction]
-            });
+            if (this.isOfflineMode) {
+                // 離線模式：更新本地資料
+                wallet.amount = newAmount;
+                if (!wallet.transactions) {
+                    wallet.transactions = [];
+                }
+                wallet.transactions.push(transaction);
+                this.saveWalletsToLocal();
+                this.renderWallets();
+            } else {
+                // 線上模式：更新Firebase
+                const { doc, updateDoc } = window.firestoreModule;
+                const walletRef = doc(window.db, 'users', this.user.uid, 'wallets', wallet.id);
+                
+                await updateDoc(walletRef, {
+                    amount: newAmount,
+                    transactions: [...(wallet.transactions || []), transaction]
+                });
+            }
 
             const successMessage = this.transactionType === 'add' 
                 ? `成功存入 ${this.formatCurrency(amount)}`
@@ -783,6 +909,7 @@ class FirebaseWalletManager {
         const item = document.createElement('div');
         item.className = `transaction-item ${transaction.type === 'add' ? 'deposit' : 'withdrawal'}`;
         item.dataset.type = transaction.type;
+        item.dataset.transactionId = transaction.id;
         
         // 處理 Firebase Timestamp 或普通 Date
         const date = transaction.date?.toDate ? transaction.date.toDate() : new Date(transaction.date);
@@ -807,6 +934,14 @@ class FirebaseWalletManager {
                 <div class="transaction-balance">
                     餘額: ${this.formatCurrency(transaction.balance)}
                 </div>
+            </div>
+            <div class="transaction-actions">
+                <button class="btn-icon edit-transaction" data-transaction-id="${transaction.id}" title="編輯">
+                    ✏️
+                </button>
+                <button class="btn-icon delete-transaction" data-transaction-id="${transaction.id}" title="刪除">
+                    🗑️
+                </button>
             </div>
         `;
         
@@ -881,6 +1016,172 @@ class FirebaseWalletManager {
         this.showNotification('交易紀錄已匯出！', 'success');
     }
 
+    // 編輯交易
+    editTransaction(transactionId) {
+        const wallet = this.wallets.find(w => w.id === this.currentViewingWallet);
+        if (!wallet) return;
+        
+        const transaction = wallet.transactions.find(t => t.id === transactionId);
+        if (!transaction) return;
+        
+        // 將交易資料填入編輯表單
+        document.getElementById('editTransactionType').value = transaction.type;
+        document.getElementById('editTransactionAmount').value = transaction.amount;
+        document.getElementById('editTransactionNote').value = transaction.note || '';
+        
+        // 格式化日期時間用於 datetime-local 輸入
+        const date = new Date(transaction.date);
+        const formattedDate = new Date(date.getTime() - (date.getTimezoneOffset() * 60000))
+            .toISOString().slice(0, -1);
+        document.getElementById('editTransactionDate').value = formattedDate;
+        
+        // 記錄正在編輯的交易ID
+        this.currentEditingTransaction = transactionId;
+        
+        // 顯示編輯彈出視窗
+        document.getElementById('editTransactionModal').style.display = 'block';
+    }
+
+    // 儲存編輯後的交易
+    async saveEditTransaction() {
+        const type = document.getElementById('editTransactionType').value;
+        const amount = parseFloat(document.getElementById('editTransactionAmount').value);
+        const note = document.getElementById('editTransactionNote').value.trim();
+        const dateStr = document.getElementById('editTransactionDate').value;
+        
+        if (!amount || amount <= 0) {
+            this.showNotification('請輸入有效的金額', 'error');
+            return;
+        }
+        
+        if (!dateStr) {
+            this.showNotification('請選擇日期', 'error');
+            return;
+        }
+        
+        const wallet = this.wallets.find(w => w.id === this.currentViewingWallet);
+        if (!wallet) return;
+        
+        const transactionIndex = wallet.transactions.findIndex(t => t.id === this.currentEditingTransaction);
+        if (transactionIndex === -1) return;
+        
+        const oldTransaction = wallet.transactions[transactionIndex];
+        const newDate = new Date(dateStr);
+        
+        // 更新交易資料
+        wallet.transactions[transactionIndex] = {
+            ...oldTransaction,
+            type: type,
+            amount: amount,
+            note: note,
+            date: newDate.toISOString()
+        };
+        
+        // 重新計算所有交易的餘額
+        this.recalculateBalances(wallet);
+        
+        try {
+            if (this.isOfflineMode) {
+                // 離線模式：儲存到本地
+                this.saveWalletsToLocal();
+                this.renderWallets();
+            } else {
+                // 線上模式：更新Firebase
+                const { doc, updateDoc } = window.firestoreModule;
+                const walletRef = doc(window.db, 'users', this.user.uid, 'wallets', wallet.id);
+                
+                await updateDoc(walletRef, {
+                    amount: wallet.amount,
+                    transactions: wallet.transactions
+                });
+            }
+            
+            // 更新交易歷史顯示
+            this.showTransactionHistory(this.currentViewingWallet);
+            
+            // 隱藏編輯彈出視窗
+            this.hideEditTransactionModal();
+            
+            this.showNotification('交易已更新！', 'success');
+        } catch (error) {
+            console.error('更新交易失敗:', error);
+            this.showNotification('更新失敗，請重試', 'error');
+        }
+    }
+
+    // 隱藏編輯交易彈出視窗
+    hideEditTransactionModal() {
+        document.getElementById('editTransactionModal').style.display = 'none';
+        this.currentEditingTransaction = null;
+    }
+
+    // 刪除交易
+    async deleteTransaction(transactionId) {
+        if (!confirm('確定要刪除這筆交易嗎？此操作無法撤銷。')) {
+            return;
+        }
+        
+        const wallet = this.wallets.find(w => w.id === this.currentViewingWallet);
+        if (!wallet) return;
+        
+        // 移除交易
+        wallet.transactions = wallet.transactions.filter(t => t.id !== transactionId);
+        
+        // 重新計算所有交易的餘額
+        this.recalculateBalances(wallet);
+        
+        try {
+            if (this.isOfflineMode) {
+                // 離線模式：儲存到本地
+                this.saveWalletsToLocal();
+                this.renderWallets();
+            } else {
+                // 線上模式：更新Firebase
+                const { doc, updateDoc } = window.firestoreModule;
+                const walletRef = doc(window.db, 'users', this.user.uid, 'wallets', wallet.id);
+                
+                await updateDoc(walletRef, {
+                    amount: wallet.amount,
+                    transactions: wallet.transactions
+                });
+            }
+            
+            // 更新交易歷史顯示
+            this.showTransactionHistory(this.currentViewingWallet);
+            
+            this.showNotification('交易已刪除！', 'success');
+        } catch (error) {
+            console.error('刪除交易失敗:', error);
+            this.showNotification('刪除失敗，請重試', 'error');
+        }
+    }
+
+    // 重新計算錢包餘額
+    recalculateBalances(wallet) {
+        if (!wallet.transactions || wallet.transactions.length === 0) {
+            wallet.amount = wallet.initialAmount || 0;
+            return;
+        }
+        
+        // 按日期排序交易
+        wallet.transactions.sort((a, b) => new Date(a.date) - new Date(b.date));
+        
+        let currentBalance = wallet.initialAmount || 0;
+        
+        // 重新計算每筆交易的餘額
+        wallet.transactions.forEach(transaction => {
+            if (transaction.type === 'add') {
+                currentBalance += transaction.amount;
+            } else {
+                currentBalance -= transaction.amount;
+            }
+            transaction.balance = currentBalance;
+        });
+        
+        // 更新錢包當前金額
+        wallet.amount = currentBalance;
+    }
+
     // 顯示通知訊息
     showNotification(message, type = 'info') {
         // 創建通知元素
@@ -938,4 +1239,5 @@ let firebaseWalletManager;
 
 document.addEventListener('DOMContentLoaded', () => {
     firebaseWalletManager = new FirebaseWalletManager();
+    window.firebaseWalletManager = firebaseWalletManager; // 設定全域變數以供 onclick 使用
 });
