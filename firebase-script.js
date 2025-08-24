@@ -39,18 +39,22 @@ class FirebaseWalletManager {
     }
 
     // 設定驗證狀態監聽器
-    setupAuthListener() {
-        const { onAuthStateChanged } = window.authModule || {};
-        
-        // 使用動態導入來載入 Firebase Auth 模組
-        import('https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js')
-            .then(({ onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, signOut }) => {
-                window.authModule = { onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, signOut };
-                
-                onAuthStateChanged(window.auth, (user) => {
-                    this.handleAuthStateChange(user);
-                });
+    async setupAuthListener() {
+        try {
+            // 載入 Firebase Auth 模組
+            if (!window.authModule) {
+                const authModule = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js');
+                window.authModule = authModule;
+            }
+            
+            const { onAuthStateChanged } = window.authModule;
+            onAuthStateChanged(window.auth, (user) => {
+                this.handleAuthStateChange(user);
             });
+        } catch (error) {
+            console.error('載入 Firebase Auth 模組失敗:', error);
+            this.showNotification('載入認證模組失敗，請重新整理頁面', 'error');
+        }
     }
 
     // 處理驗證狀態變更
@@ -147,18 +151,20 @@ class FirebaseWalletManager {
     // Google 登入
     async loginWithGoogle() {
         try {
-            // 檢查是否為手機設備
-            const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-            
+            // 確保 Firebase Auth 模組已載入
             if (!window.authModule) {
-                throw new Error('Firebase Auth 模組尚未載入');
+                const authModule = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js');
+                window.authModule = authModule;
             }
             
             const { GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult } = window.authModule;
             const provider = new GoogleAuthProvider();
             
+            // 檢查是否為手機設備
+            const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+            
             if (isMobile) {
-                // 手機端：先檢查重定向結果，然後使用重定向
+                // 手機端：先檢查重定向結果
                 try {
                     const redirectResult = await getRedirectResult(window.auth);
                     if (redirectResult && redirectResult.user) {
@@ -169,22 +175,51 @@ class FirebaseWalletManager {
                     console.log('檢查重定向結果失敗:', redirectError);
                 }
                 
-                // 沒有重定向結果，啟動重定向流程
+                // 使用重定向登入
+                console.log('手機端：使用重定向登入');
+                this.showNotification('正在導向 Google 登入...', 'info');
                 await signInWithRedirect(window.auth, provider);
             } else {
                 // 桌面端：使用彈出視窗
-                await signInWithPopup(window.auth, provider);
-                this.showNotification('登入成功！', 'success');
+                console.log('桌面端：使用彈出視窗登入');
+                const result = await signInWithPopup(window.auth, provider);
+                if (result && result.user) {
+                    this.showNotification('登入成功！', 'success');
+                }
             }
         } catch (error) {
             console.error('登入失敗:', error);
-            this.showNotification('登入失敗，請重試', 'error');
+            let errorMessage = '登入失敗';
+            
+            if (error.code) {
+                switch (error.code) {
+                    case 'auth/popup-blocked':
+                        errorMessage = '彈出視窗被阻擋，請允許彈出視窗';
+                        break;
+                    case 'auth/popup-closed-by-user':
+                        errorMessage = '登入流程被取消';
+                        break;
+                    case 'auth/network-request-failed':
+                        errorMessage = '網路連線失敗，請檢查網路';
+                        break;
+                    default:
+                        errorMessage = `登入失敗: ${error.message}`;
+                }
+            }
+            
+            this.showNotification(errorMessage, 'error');
         }
     }
 
     // 登出
     async logout() {
         try {
+            // 確保 Firebase Auth 模組已載入
+            if (!window.authModule) {
+                const authModule = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js');
+                window.authModule = authModule;
+            }
+            
             const { signOut } = window.authModule;
             await signOut(window.auth);
             this.showNotification('已登出', 'info');
