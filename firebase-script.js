@@ -614,19 +614,39 @@ class FirebaseWalletManager {
         card.innerHTML = `
             <div class="wallet-header">
                 <h3 class="wallet-name">${wallet.name}</h3>
-                <button class="edit-btn" onclick="firebaseWalletManager.showEditWalletModal('${wallet.id}')">⚙️</button>
+                <button class="edit-btn" data-wallet-id="${wallet.id}" data-action="edit">⚙️</button>
             </div>
             <div class="wallet-amount">${this.formatCurrency(wallet.amount)}</div>
             ${goalHtml}
             <div class="wallet-actions">
-                <button class="btn btn-success" onclick="firebaseWalletManager.showTransactionModal('${wallet.id}', 'add')">
+                <button class="btn btn-success" data-wallet-id="${wallet.id}" data-action="add">
                     ➕ 存入
                 </button>
-                <button class="btn btn-danger" onclick="firebaseWalletManager.showTransactionModal('${wallet.id}', 'subtract')">
+                <button class="btn btn-danger" data-wallet-id="${wallet.id}" data-action="subtract">
                     ➖ 提取
                 </button>
             </div>
         `;
+
+        // 使用 addEventListener 而不是 onclick 屬性
+        const editBtn = card.querySelector('.edit-btn');
+        const addBtn = card.querySelector('[data-action="add"]');
+        const subtractBtn = card.querySelector('[data-action="subtract"]');
+
+        editBtn.addEventListener('click', () => {
+            console.log('編輯按鈕被點擊，錢包ID:', wallet.id);
+            this.showEditWalletModal(wallet.id);
+        });
+
+        addBtn.addEventListener('click', () => {
+            console.log('存入按鈕被點擊，錢包ID:', wallet.id);
+            this.showTransactionModal(wallet.id, 'add');
+        });
+
+        subtractBtn.addEventListener('click', () => {
+            console.log('提取按鈕被點擊，錢包ID:', wallet.id);
+            this.showTransactionModal(wallet.id, 'subtract');
+        });
 
         return card;
     }
@@ -959,33 +979,68 @@ class FirebaseWalletManager {
 let firebaseWalletManager;
 
 document.addEventListener('DOMContentLoaded', () => {
-    firebaseWalletManager = new FirebaseWalletManager();
+    console.log('DOM 載入完成，開始初始化 Firebase 錢包管理器');
     
-    // 檢測設備類型並顯示對應提示
-    const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-    const mobileHint = document.getElementById('mobileHint');
-    const desktopHint = document.getElementById('desktopHint');
-    
-    if (isMobile) {
-        mobileHint.style.display = 'block';
-        desktopHint.style.display = 'none';
-    } else {
-        mobileHint.style.display = 'none';
-        desktopHint.style.display = 'block';
-    }
-    
-    // 為登入按鈕添加用戶手勢追蹤
-    const loginBtn = document.getElementById('loginBtn');
-    if (loginBtn) {
-        loginBtn.addEventListener('click', (event) => {
-            // 標記這是真實的用戶點擊
-            window.event = event;
-            console.log('用戶手勢檢測:', event.isTrusted ? '真實點擊' : '程式觸發');
-            
-            if (!event.isTrusted && isMobile) {
-                firebaseWalletManager.showNotification('請直接點擊登入按鈕', 'warning');
-                return false;
+    try {
+        firebaseWalletManager = new FirebaseWalletManager();
+        
+        // 確保全局可訪問
+        window.firebaseWalletManager = firebaseWalletManager;
+        
+        console.log('Firebase 錢包管理器初始化完成');
+        
+        // 檢測設備類型並顯示對應提示
+        const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+        const mobileHint = document.getElementById('mobileHint');
+        const desktopHint = document.getElementById('desktopHint');
+        
+        if (mobileHint && desktopHint) {
+            if (isMobile) {
+                mobileHint.style.display = 'block';
+                desktopHint.style.display = 'none';
+            } else {
+                mobileHint.style.display = 'none';
+                desktopHint.style.display = 'block';
             }
-        });
+        }
+        
+        // 為登入按鈕添加用戶手勢追蹤
+        const loginBtn = document.getElementById('loginBtn');
+        if (loginBtn) {
+            loginBtn.addEventListener('click', (event) => {
+                // 標記這是真實的用戶點擊
+                window.event = event;
+                console.log('用戶手勢檢測:', event.isTrusted ? '真實點擊' : '程式觸發');
+                
+                if (!event.isTrusted && isMobile) {
+                    firebaseWalletManager.showNotification('請直接點擊登入按鈕', 'warning');
+                    return false;
+                }
+            });
+        }
+        
+    } catch (error) {
+        console.error('初始化錢包管理器時發生錯誤:', error);
+        
+        // 顯示錯誤訊息給用戶
+        const errorDiv = document.createElement('div');
+        errorDiv.style.cssText = `
+            position: fixed; 
+            top: 50%; 
+            left: 50%; 
+            transform: translate(-50%, -50%); 
+            background: #f44336; 
+            color: white; 
+            padding: 20px; 
+            border-radius: 8px; 
+            z-index: 10000;
+            text-align: center;
+        `;
+        errorDiv.innerHTML = `
+            <h3>應用程式載入失敗</h3>
+            <p>請重新整理頁面，或檢查網路連線</p>
+            <button onclick="location.reload()" style="background: white; color: #f44336; border: none; padding: 10px 20px; margin-top: 10px; border-radius: 4px; cursor: pointer;">重新整理</button>
+        `;
+        document.body.appendChild(errorDiv);
     }
 });
