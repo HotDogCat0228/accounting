@@ -1,0 +1,239 @@
+/* 交易記錄相關樣式 */
+.transaction-summary {
+    background: linear-gradient(45deg, #f8f9fa, #e9ecef);
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 20px;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 15px;
+}
+
+.summary-item {
+    text-align: center;
+    padding: 10px;
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.summary-label {
+    display: block;
+    font-size: 0.9rem;
+    color: #666;
+    margin-bottom: 5px;
+}
+
+.summary-value {
+    display: block;
+    font-size: 1.2rem;
+    font-weight: bold;
+}
+
+.summary-value.positive {
+    color: #28a745;
+}
+
+.summary-value.negative {
+    color: #dc3545;
+}
+
+.transaction-filters {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 20px;
+    justify-content: center;
+}
+
+.filter-btn {
+    padding: 8px 16px;
+    border: 2px solid #dee2e6;
+    background: white;
+    color: #6c757d;
+    border-radius: 20px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    font-weight: 500;
+}
+
+.filter-btn:hover {
+    border-color: #2196F3;
+    color: #2196F3;
+}
+
+.filter-btn.active {
+    background: #2196F3;
+    border-color: #2196F3;
+    color: white;
+}
+
+.transaction-list {
+    max-height: 400px;
+    overflow-y: auto;
+    padding: 10px 0;
+}
+
+.transaction-item {
+    background: white;
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+    margin-bottom: 10px;
+    padding: 15px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    transition: all 0.3s ease;
+    cursor: pointer;
+}
+
+.transaction-item:hover {
+    border-color: #2196F3;
+    transform: translateX(5px);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.transaction-item.deposit {
+    border-left: 4px solid #28a745;
+}
+
+.transaction-item.withdrawal {
+    border-left: 4px solid #dc3545;
+}
+
+.transaction-info {
+    flex: 1;
+}
+
+.transaction-type {
+    font-weight: bold;
+    margin-bottom: 4px;
+}
+
+.transaction-type.deposit {
+    color: #28a745;
+}
+
+.transaction-type.withdrawal {
+    color: #dc3545;
+}
+
+.transaction-note {
+    color: #666;
+    font-size: 0.9rem;
+    margin-bottom: 2px;
+}
+
+.transaction-date {
+    color: #999;
+    font-size: 0.8rem;
+}
+
+.transaction-amount {
+    font-size: 1.2rem;
+    font-weight: bold;
+    text-align: right;
+}
+
+.transaction-amount.deposit {
+    color: #28a745;
+}
+
+.transaction-amount.withdrawal {
+    color: #dc3545;
+}
+
+.transaction-actions {
+    display: flex;
+    gap: 5px;
+    margin-left: 10px;
+}
+
+.transaction-edit-btn, .transaction-delete-btn {
+    padding: 5px 8px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 12px;
+    transition: all 0.2s ease;
+}
+
+.transaction-edit-btn {
+    background: #ffc107;
+    color: #212529;
+}
+
+.transaction-edit-btn:hover {
+    background: #e0a800;
+}
+
+.transaction-delete-btn {
+    background: #dc3545;
+    color: white;
+}
+
+.transaction-delete-btn:hover {
+    background: #c82333;
+}
+
+.empty-transactions {
+    text-align: center;
+    padding: 40px 20px;
+    color: #666;
+}
+
+.empty-transactions h3 {
+    margin-bottom: 10px;
+    color: #333;
+}
+
+/* 交易記錄按鈕 */
+.history-btn {
+    background: linear-gradient(45deg, #6f42c1, #5a2d91);
+    color: white;
+    border: none;
+    padding: 8px 12px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 600;
+    transition: all 0.3s ease;
+    margin-left: 10px;
+}
+
+.history-btn:hover {
+    background: linear-gradient(45deg, #5a2d91, #6f42c1);
+    transform: translateY(-1px);
+}
+
+/* 響應式設計 */
+@media (max-width: 768px) {
+    .transaction-summary {
+        grid-template-columns: 1fr;
+        gap: 10px;
+    }
+    
+    .transaction-filters {
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+    
+    .filter-btn {
+        flex: 1;
+        min-width: 80px;
+    }
+    
+    .transaction-item {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 10px;
+    }
+    
+    .transaction-amount {
+        align-self: flex-end;
+    }
+    
+    .transaction-actions {
+        align-self: flex-end;
+        margin-left: 0;
+    }
+}

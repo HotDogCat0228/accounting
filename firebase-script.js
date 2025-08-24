@@ -270,6 +270,37 @@ class FirebaseWalletManager {
             });
             deleteWalletBtn.setAttribute('data-event-bound', 'true');
         }
+
+        // 檢查交易記錄相關按鈕
+        const closeHistoryBtn = document.getElementById('closeHistoryBtn');
+        if (closeHistoryBtn && !closeHistoryBtn.hasAttribute('data-event-bound')) {
+            console.log('重新綁定關閉交易記錄按鈕事件');
+            closeHistoryBtn.addEventListener('click', () => {
+                console.log('關閉交易記錄按鈕被點擊');
+                this.hideTransactionHistoryModal();
+            });
+            closeHistoryBtn.setAttribute('data-event-bound', 'true');
+        }
+
+        const saveEditTransactionBtn = document.getElementById('saveEditTransactionBtn');
+        if (saveEditTransactionBtn && !saveEditTransactionBtn.hasAttribute('data-event-bound')) {
+            console.log('重新綁定保存編輯交易按鈕事件');
+            saveEditTransactionBtn.addEventListener('click', () => {
+                console.log('保存編輯交易按鈕被點擊');
+                this.saveEditedTransaction();
+            });
+            saveEditTransactionBtn.setAttribute('data-event-bound', 'true');
+        }
+
+        const cancelEditTransactionBtn = document.getElementById('cancelEditTransactionBtn');
+        if (cancelEditTransactionBtn && !cancelEditTransactionBtn.hasAttribute('data-event-bound')) {
+            console.log('重新綁定取消編輯交易按鈕事件');
+            cancelEditTransactionBtn.addEventListener('click', () => {
+                console.log('取消編輯交易按鈕被點擊');
+                this.hideEditTransactionModal();
+            });
+            cancelEditTransactionBtn.setAttribute('data-event-bound', 'true');
+        }
     }
 
     // 隱藏錢包區域
@@ -625,6 +656,9 @@ class FirebaseWalletManager {
                 <button class="btn btn-danger" data-wallet-id="${wallet.id}" data-action="subtract">
                     ➖ 提取
                 </button>
+                <button class="history-btn" data-wallet-id="${wallet.id}" data-action="history">
+                    📋 記錄
+                </button>
             </div>
         `;
 
@@ -632,6 +666,7 @@ class FirebaseWalletManager {
         const editBtn = card.querySelector('.edit-btn');
         const addBtn = card.querySelector('[data-action="add"]');
         const subtractBtn = card.querySelector('[data-action="subtract"]');
+        const historyBtn = card.querySelector('[data-action="history"]');
 
         editBtn.addEventListener('click', () => {
             console.log('編輯按鈕被點擊，錢包ID:', wallet.id);
@@ -646,6 +681,11 @@ class FirebaseWalletManager {
         subtractBtn.addEventListener('click', () => {
             console.log('提取按鈕被點擊，錢包ID:', wallet.id);
             this.showTransactionModal(wallet.id, 'subtract');
+        });
+
+        historyBtn.addEventListener('click', () => {
+            console.log('交易記錄按鈕被點擊，錢包ID:', wallet.id);
+            this.showTransactionHistoryModal(wallet.id);
         });
 
         return card;
@@ -810,22 +850,26 @@ class FirebaseWalletManager {
         }
 
         try {
-            const { doc, updateDoc } = window.firestoreModule;
+            const { doc, updateDoc, collection, addDoc } = window.firestoreModule;
             const walletRef = doc(window.db, 'users', this.user.uid, 'wallets', wallet.id);
+            const transactionsRef = collection(window.db, 'users', this.user.uid, 'wallets', wallet.id, 'transactions');
             
-            const transaction = {
-                id: Date.now().toString(),
+            // 創建交易記錄
+            const transactionData = {
                 type: this.transactionType,
                 amount: amount,
-                note: note,
+                note: note || '',
                 date: new Date(),
-                balance: newAmount
+                oldBalance: wallet.amount,
+                newBalance: newAmount,
+                createdAt: new Date()
             };
 
-            await updateDoc(walletRef, {
-                amount: newAmount,
-                transactions: [...(wallet.transactions || []), transaction]
-            });
+            // 同時更新錢包金額和添加交易記錄
+            await Promise.all([
+                updateDoc(walletRef, { amount: newAmount }),
+                addDoc(transactionsRef, transactionData)
+            ]);
 
             const successMessage = this.transactionType === 'add' 
                 ? `成功存入 ${this.formatCurrency(amount)}`
@@ -920,6 +964,322 @@ class FirebaseWalletManager {
                 console.error('刪除錢包失敗:', error);
                 this.showNotification('刪除失敗，請重試', 'error');
             }
+        }
+    }
+
+    // 顯示交易記錄模態視窗
+    async showTransactionHistoryModal(walletId) {
+        console.log('顯示交易記錄，錢包ID:', walletId);
+        
+        const wallet = this.wallets.find(w => w.id === walletId);
+        if (!wallet) {
+            this.showNotification('錢包不存在', 'error');
+            return;
+        }
+
+        this.currentHistoryWallet = walletId;
+        this.currentFilter = 'all';
+        
+        // 設定模態視窗標題
+        document.getElementById('historyTitle').textContent = `${wallet.name} - 交易記錄`;
+        
+        // 載入交易記錄
+        await this.loadTransactionHistory(walletId);
+        
+        // 設定篩選器事件監聽器
+        this.setupTransactionFilters();
+        
+        // 顯示模態視窗
+        document.getElementById('transactionHistoryModal').style.display = 'block';
+    }
+
+    // 載入交易記錄
+    async loadTransactionHistory(walletId) {
+        try {
+            const { collection, query, orderBy, onSnapshot } = window.firestoreModule;
+            const transactionsRef = collection(window.db, 'users', this.user.uid, 'wallets', walletId, 'transactions');
+            const q = query(transactionsRef, orderBy('createdAt', 'desc'));
+            
+            // 設定即時監聽器
+            if (this.transactionUnsubscribe) {
+                this.transactionUnsubscribe();
+            }
+            
+            this.transactionUnsubscribe = onSnapshot(q, (snapshot) => {
+                this.currentTransactions = [];
+                snapshot.forEach((doc) => {
+                    this.currentTransactions.push({
+                        id: doc.id,
+                        ...doc.data()
+                    });
+                });
+                
+                console.log(`載入 ${this.currentTransactions.length} 筆交易記錄`);
+                this.renderTransactionHistory();
+                this.updateTransactionSummary();
+            });
+            
+        } catch (error) {
+            console.error('載入交易記錄失敗:', error);
+            this.showNotification('載入交易記錄失敗', 'error');
+        }
+    }
+
+    // 渲染交易記錄列表
+    renderTransactionHistory() {
+        const container = document.getElementById('transactionList');
+        
+        if (!this.currentTransactions || this.currentTransactions.length === 0) {
+            container.innerHTML = `
+                <div class="empty-transactions">
+                    <h3>還沒有交易記錄</h3>
+                    <p>開始您的第一筆存入或提取吧！</p>
+                </div>
+            `;
+            return;
+        }
+
+        // 根據當前篩選器過濾交易
+        let filteredTransactions = this.currentTransactions;
+        if (this.currentFilter === 'deposits') {
+            filteredTransactions = this.currentTransactions.filter(t => t.type === 'add');
+        } else if (this.currentFilter === 'withdrawals') {
+            filteredTransactions = this.currentTransactions.filter(t => t.type === 'subtract');
+        }
+
+        container.innerHTML = '';
+        
+        filteredTransactions.forEach(transaction => {
+            const transactionItem = this.createTransactionItem(transaction);
+            container.appendChild(transactionItem);
+        });
+    }
+
+    // 創建交易項目元素
+    createTransactionItem(transaction) {
+        const item = document.createElement('div');
+        item.className = `transaction-item ${transaction.type === 'add' ? 'deposit' : 'withdrawal'}`;
+        
+        const typeText = transaction.type === 'add' ? '存入' : '提取';
+        const typeClass = transaction.type === 'add' ? 'deposit' : 'withdrawal';
+        const amountPrefix = transaction.type === 'add' ? '+' : '-';
+        
+        // 格式化日期
+        const date = transaction.date?.toDate?.() || new Date(transaction.date);
+        const dateStr = date.toLocaleString('zh-TW', {
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+
+        item.innerHTML = `
+            <div class="transaction-info">
+                <div class="transaction-type ${typeClass}">${typeText}</div>
+                <div class="transaction-note">${transaction.note || '無備註'}</div>
+                <div class="transaction-date">${dateStr}</div>
+            </div>
+            <div class="transaction-amount ${typeClass}">
+                ${amountPrefix}${this.formatCurrency(transaction.amount)}
+            </div>
+            <div class="transaction-actions">
+                <button class="transaction-edit-btn" data-transaction-id="${transaction.id}">編輯</button>
+                <button class="transaction-delete-btn" data-transaction-id="${transaction.id}">刪除</button>
+            </div>
+        `;
+
+        // 添加事件監聽器
+        const editBtn = item.querySelector('.transaction-edit-btn');
+        const deleteBtn = item.querySelector('.transaction-delete-btn');
+
+        editBtn.addEventListener('click', () => {
+            this.showEditTransactionModal(transaction);
+        });
+
+        deleteBtn.addEventListener('click', () => {
+            this.deleteTransaction(transaction);
+        });
+
+        return item;
+    }
+
+    // 更新交易統計摘要
+    updateTransactionSummary() {
+        if (!this.currentTransactions) return;
+
+        const deposits = this.currentTransactions.filter(t => t.type === 'add');
+        const withdrawals = this.currentTransactions.filter(t => t.type === 'subtract');
+        
+        const totalDeposits = deposits.reduce((sum, t) => sum + t.amount, 0);
+        const totalWithdrawals = withdrawals.reduce((sum, t) => sum + t.amount, 0);
+        
+        document.getElementById('totalDeposits').textContent = this.formatCurrency(totalDeposits);
+        document.getElementById('totalWithdrawals').textContent = this.formatCurrency(totalWithdrawals);
+        document.getElementById('totalTransactions').textContent = `${this.currentTransactions.length} 筆`;
+    }
+
+    // 設定交易篩選器
+    setupTransactionFilters() {
+        const filterBtns = document.querySelectorAll('.filter-btn');
+        
+        // 移除舊的事件監聽器並添加新的
+        filterBtns.forEach(btn => {
+            btn.replaceWith(btn.cloneNode(true));
+        });
+        
+        // 重新獲取元素並添加事件監聽器
+        document.querySelectorAll('.filter-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                // 更新按鈕狀態
+                document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                
+                // 設定篩選器
+                if (btn.id === 'filterAll') this.currentFilter = 'all';
+                else if (btn.id === 'filterDeposits') this.currentFilter = 'deposits';
+                else if (btn.id === 'filterWithdrawals') this.currentFilter = 'withdrawals';
+                
+                // 重新渲染
+                this.renderTransactionHistory();
+            });
+        });
+    }
+
+    // 隱藏交易記錄模態視窗
+    hideTransactionHistoryModal() {
+        document.getElementById('transactionHistoryModal').style.display = 'none';
+        
+        // 清除監聽器
+        if (this.transactionUnsubscribe) {
+            this.transactionUnsubscribe();
+            this.transactionUnsubscribe = null;
+        }
+        
+        this.currentHistoryWallet = null;
+        this.currentTransactions = [];
+    }
+
+    // 顯示編輯交易模態視窗
+    showEditTransactionModal(transaction) {
+        console.log('編輯交易:', transaction);
+        this.currentEditingTransaction = transaction;
+        
+        // 填入現有數據
+        document.getElementById('editTransactionType').value = transaction.type;
+        document.getElementById('editTransactionAmount').value = transaction.amount;
+        document.getElementById('editTransactionNote').value = transaction.note || '';
+        
+        // 設定日期（轉換為本地時間格式）
+        const date = transaction.date?.toDate?.() || new Date(transaction.date);
+        const dateStr = new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+        document.getElementById('editTransactionDate').value = dateStr;
+        
+        document.getElementById('editTransactionModal').style.display = 'block';
+    }
+
+    // 隱藏編輯交易模態視窗
+    hideEditTransactionModal() {
+        document.getElementById('editTransactionModal').style.display = 'none';
+        this.currentEditingTransaction = null;
+    }
+
+    // 保存編輯的交易
+    async saveEditedTransaction() {
+        if (!this.currentEditingTransaction) return;
+
+        const type = document.getElementById('editTransactionType').value;
+        const amount = parseFloat(document.getElementById('editTransactionAmount').value);
+        const note = document.getElementById('editTransactionNote').value.trim();
+        const dateStr = document.getElementById('editTransactionDate').value;
+
+        if (!amount || amount <= 0) {
+            this.showNotification('請輸入有效的金額', 'warning');
+            return;
+        }
+
+        if (!dateStr) {
+            this.showNotification('請選擇日期', 'warning');
+            return;
+        }
+
+        try {
+            const { doc, updateDoc } = window.firestoreModule;
+            const transactionRef = doc(
+                window.db, 'users', this.user.uid, 'wallets', 
+                this.currentHistoryWallet, 'transactions', 
+                this.currentEditingTransaction.id
+            );
+
+            // 如果金額或類型改變，需要重新計算錢包餘額
+            const oldTransaction = this.currentEditingTransaction;
+            const amountDiff = this.calculateAmountDifference(oldTransaction, { type, amount });
+            
+            if (amountDiff !== 0) {
+                await this.updateWalletBalance(this.currentHistoryWallet, amountDiff);
+            }
+
+            await updateDoc(transactionRef, {
+                type,
+                amount,
+                note: note || '',
+                date: new Date(dateStr),
+                updatedAt: new Date()
+            });
+
+            this.hideEditTransactionModal();
+            this.showNotification('交易記錄已更新', 'success');
+
+        } catch (error) {
+            console.error('更新交易記錄失敗:', error);
+            this.showNotification('更新失敗，請重試', 'error');
+        }
+    }
+
+    // 計算金額差異
+    calculateAmountDifference(oldTransaction, newTransaction) {
+        const oldEffect = oldTransaction.type === 'add' ? oldTransaction.amount : -oldTransaction.amount;
+        const newEffect = newTransaction.type === 'add' ? newTransaction.amount : -newTransaction.amount;
+        return newEffect - oldEffect;
+    }
+
+    // 更新錢包餘額
+    async updateWalletBalance(walletId, amountChange) {
+        const { doc, updateDoc, getDoc } = window.firestoreModule;
+        const walletRef = doc(window.db, 'users', this.user.uid, 'wallets', walletId);
+        
+        const walletDoc = await getDoc(walletRef);
+        const currentAmount = walletDoc.data().amount;
+        const newAmount = currentAmount + amountChange;
+        
+        await updateDoc(walletRef, { amount: newAmount });
+    }
+
+    // 刪除交易
+    async deleteTransaction(transaction) {
+        if (!confirm(`確定要刪除這筆${transaction.type === 'add' ? '存入' : '提取'}記錄嗎？`)) {
+            return;
+        }
+
+        try {
+            const { doc, deleteDoc } = window.firestoreModule;
+            const transactionRef = doc(
+                window.db, 'users', this.user.uid, 'wallets', 
+                this.currentHistoryWallet, 'transactions', 
+                transaction.id
+            );
+
+            // 恢復錢包餘額（取消這筆交易的影響）
+            const amountChange = transaction.type === 'add' ? -transaction.amount : transaction.amount;
+            await this.updateWalletBalance(this.currentHistoryWallet, amountChange);
+            
+            await deleteDoc(transactionRef);
+            
+            this.showNotification('交易記錄已刪除', 'info');
+
+        } catch (error) {
+            console.error('刪除交易記錄失敗:', error);
+            this.showNotification('刪除失敗，請重試', 'error');
         }
     }
 
