@@ -1,19 +1,12 @@
-const CACHE_NAME = 'wallet-app-v1.0.1';
+const CACHE_NAME = 'wallet-app-v1.0.2';
 const urlsToCache = [
   './',
   './index.html',
   './styles.css',
   './firebase-script.js',
-  './script.js',
   './manifest.json',
-  // Firebase SDK
-  'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js',
-  'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js',
-  'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js'
-  // 暫時移除圖標，因為它們不存在
-  // './icons/icon-192x192.png',
-  // './icons/icon-512x512.png', 
-  // './icons/apple-touch-icon.png'
+  './favicon.ico',
+  './icons/icon-144x144.svg'
 ];
 
 // 安裝 Service Worker
@@ -23,10 +16,23 @@ self.addEventListener('install', function(event) {
     caches.open(CACHE_NAME)
       .then(function(cache) {
         console.log('Opened cache');
-        return cache.addAll(urlsToCache);
+        // 分別處理每個 URL 以避免單一失敗導致全部失敗
+        return Promise.allSettled(
+          urlsToCache.map(url => 
+            cache.add(url).catch(err => {
+              console.warn('Failed to cache:', url, err);
+              return null;
+            })
+          )
+        );
+      })
+      .then(function(results) {
+        console.log('Cache setup completed with', results.length, 'items attempted');
+        // 強制激活新的 service worker
+        return self.skipWaiting();
       })
       .catch(function(error) {
-        console.log('Cache add failed:', error);
+        console.error('Service Worker install failed:', error);
       })
   );
 });
@@ -35,16 +41,21 @@ self.addEventListener('install', function(event) {
 self.addEventListener('activate', function(event) {
   console.log('Service Worker activating...');
   event.waitUntil(
-    caches.keys().then(function(cacheNames) {
-      return Promise.all(
-        cacheNames.map(function(cacheName) {
-          if (cacheName !== CACHE_NAME) {
-            console.log('Deleting old cache:', cacheName);
-            return caches.delete(cacheName);
-          }
-        })
-      );
-    })
+    Promise.all([
+      // 清理舊緩存
+      caches.keys().then(function(cacheNames) {
+        return Promise.all(
+          cacheNames.map(function(cacheName) {
+            if (cacheName !== CACHE_NAME) {
+              console.log('Deleting old cache:', cacheName);
+              return caches.delete(cacheName);
+            }
+          })
+        );
+      }),
+      // 立即接管所有客戶端
+      self.clients.claim()
+    ])
   );
 });
 
@@ -121,8 +132,8 @@ self.addEventListener('push', function(event) {
   
   const options = {
     body: event.data ? event.data.text() : '您有新的財務提醒',
-    icon: './icons/icon-192x192.png',
-    badge: './icons/icon-72x72.png',
+    icon: './icons/icon-144x144.svg',
+    badge: './favicon.ico',
     vibrate: [200, 100, 200],
     data: {
       url: './'
