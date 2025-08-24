@@ -11,6 +11,22 @@ class FirebaseWalletManager {
         this.unsubscribe = null;
         this.isOfflineMode = false;
         
+        // 檢測 iPhone PWA 並提供早期提示
+        const isIPhone = /iPhone|iPod/i.test(navigator.userAgent);
+        const isPWA = window.navigator.standalone === true || window.matchMedia('(display-mode: standalone)').matches;
+        
+        if (isIPhone && isPWA) {
+            console.log('檢測到 iPhone PWA 模式，將優化體驗');
+            this.isIPhonePWA = true;
+            
+            // 延遲顯示友好提示
+            setTimeout(() => {
+                this.showNotification('iPhone PWA 檢測：建議使用離線模式獲得最佳體驗！', 'info');
+            }, 3000);
+        } else {
+            this.isIPhonePWA = false;
+        }
+        
         // 等待 Firebase 初始化完成
         this.waitForFirebase().then(() => {
             this.init();
@@ -281,9 +297,13 @@ class FirebaseWalletManager {
                 throw new Error('Firebase Auth 模組尚未載入');
             }
             
-            // 檢查是否為移動設備
+            // 檢查是否為移動設備和PWA
             const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-            console.log('設備類型:', isMobile ? '手機' : '桌面');
+            const isIOS = /iPad|iPhone|iPod/i.test(navigator.userAgent);
+            const isPWA = window.navigator.standalone === true || window.matchMedia('(display-mode: standalone)').matches;
+            const isSafari = /Safari/i.test(navigator.userAgent) && !/Chrome|CriOS|FxiOS|EdgiOS/i.test(navigator.userAgent);
+            
+            console.log(`設備環境: 手機=${isMobile}, iOS=${isIOS}, PWA=${isPWA}, Safari=${isSafari}`);
             
             const { GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult } = window.authModule;
             const provider = new GoogleAuthProvider();
@@ -292,9 +312,30 @@ class FirebaseWalletManager {
             provider.addScope('profile');
             provider.addScope('email');
             
-            this.showNotification('正在登入中...', 'info');
-            
-            if (isMobile) {
+            // iPhone PWA 有特殊限制，需要特別處理
+            if (isIOS && isPWA) {
+                console.log('檢測到 iPhone PWA 模式');
+                this.showNotification('iPhone PWA 模式：登入功能受限，建議使用離線模式', 'warning');
+                
+                // 提供用戶選擇
+                setTimeout(() => {
+                    if (confirm('iPhone PWA 模式下 Google 登入可能無法正常工作。\n\n建議使用離線模式，離線模式提供完整功能且資料安全。\n\n是否改用離線模式？')) {
+                        this.enableOfflineMode();
+                        return;
+                    }
+                }, 1000);
+                
+                // 如果用戶堅持要嘗試登入，使用特殊處理
+                try {
+                    console.log('iPhone PWA 嘗試登入...');
+                    const result = await signInWithPopup(window.auth, provider);
+                    console.log('意外成功!', result.user.displayName);
+                    this.showNotification('登入成功！', 'success');
+                } catch (pwaError) {
+                    console.error('iPhone PWA 登入失敗:', pwaError);
+                    throw new Error('iPhone PWA 登入限制: ' + pwaError.message);
+                }
+            } else if (isMobile || isIOS) {
                 console.log('使用重定向登入...');
                 // 手機端使用重定向
                 await signInWithRedirect(window.auth, provider);
@@ -315,7 +356,7 @@ class FirebaseWalletManager {
             // 根據錯誤類型提供具體的錯誤信息
             switch (error.code) {
                 case 'auth/popup-blocked':
-                    errorMessage += '彈出視窗被封鎖，請允許彈出視窗或使用離線模式';
+                    errorMessage += 'iPhone Safari/PWA 阻擋了彈出視窗';
                     shouldOfferOffline = true;
                     break;
                 case 'auth/popup-closed-by-user':
@@ -323,7 +364,7 @@ class FirebaseWalletManager {
                     shouldOfferOffline = true;
                     break;
                 case 'auth/unauthorized-domain':
-                    errorMessage += '網域未授權，請使用離線模式';
+                    errorMessage += 'GitHub Pages 域名未在 Firebase 中授權';
                     shouldOfferOffline = true;
                     break;
                 case 'auth/network-request-failed':
@@ -334,7 +375,10 @@ class FirebaseWalletManager {
                     errorMessage += '嘗試次數過多，請稍後再試';
                     break;
                 default:
-                    if (error.message.includes('Firebase Auth')) {
+                    if (error.message.includes('iPhone PWA 登入限制')) {
+                        errorMessage += 'iPhone PWA 模式限制，建議使用離線模式';
+                        shouldOfferOffline = true;
+                    } else if (error.message.includes('Firebase Auth')) {
                         errorMessage += 'Firebase服務問題';
                         shouldOfferOffline = true;
                     } else {
@@ -413,7 +457,15 @@ class FirebaseWalletManager {
         
         // 檢查設備類型
         const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+        const isIPhone = /iPhone|iPod/i.test(navigator.userAgent);
+        const isIOS = /iPad|iPhone|iPod/i.test(navigator.userAgent);
+        const isPWA = window.navigator.standalone === true || window.matchMedia('(display-mode: standalone)').matches;
+        
         diagnostics.push(`設備類型: ${isMobile ? '📱 手機' : '💻 桌面'}`);
+        diagnostics.push(`iOS 設備: ${isIOS ? '✅ 是' : '❌ 否'}`);
+        diagnostics.push(`iPhone: ${isIPhone ? '✅ 是' : '❌ 否'}`);
+        diagnostics.push(`PWA 模式: ${isPWA ? '✅ 是' : '❌ 否'}`);
+        diagnostics.push(`Safari 版本: ${navigator.userAgent.match(/Version\/([0-9._]+)/)?.[1] || '未知'}`);
         
         // 檢查當前域名
         diagnostics.push('');
@@ -421,6 +473,7 @@ class FirebaseWalletManager {
         diagnostics.push(`當前域名: ${window.location.hostname}`);
         diagnostics.push(`完整URL: ${window.location.href}`);
         diagnostics.push(`協議: ${window.location.protocol}`);
+        diagnostics.push(`端口: ${window.location.port || '默認端口'}`);
         
         // 檢查localStorage
         diagnostics.push('');
@@ -436,6 +489,17 @@ class FirebaseWalletManager {
         // 顯示離線錢包數量
         const offlineWallets = this.loadWalletsFromLocal();
         diagnostics.push(`離線錢包數量: ${offlineWallets.length}`);
+        
+        // iPhone PWA 特殊說明
+        if (isIPhone && isPWA) {
+            diagnostics.push('');
+            diagnostics.push('=== iPhone PWA 特別說明 ===');
+            diagnostics.push('⚠️  iPhone PWA 模式限制:');
+            diagnostics.push('• Safari PWA 模式限制第三方登入');
+            diagnostics.push('• Google OAuth 彈出視窗被阻擋');
+            diagnostics.push('• 建議使用離線模式獲得完整體驗');
+            diagnostics.push('• 離線模式資料安全且功能完整');
+        }
         
         // 顯示結果
         const message = diagnostics.join('\n');
