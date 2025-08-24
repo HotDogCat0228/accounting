@@ -409,9 +409,11 @@ class FirebaseWalletManager {
                     if (testPopup) {
                         testPopup.close();
                         console.log('彈出視窗測試：允許');
+                        this.updateLoginStatus('彈出視窗可用，正在登入...');
                     } else {
                         console.log('彈出視窗測試：被阻擋');
                         this.updateLoginStatus('彈出視窗被阻擋，使用重定向方式...');
+                        localStorage.setItem('lastLoginError', 'popup-blocked: iPhone PWA 阻擋彈出視窗');
                         await signInWithRedirect(window.auth, provider);
                         return;
                     }
@@ -445,9 +447,25 @@ class FirebaseWalletManager {
                 }
             } else if (isMobile || isIOS) {
                 console.log('使用重定向登入...');
-                // 手機端使用重定向
-                await signInWithRedirect(window.auth, provider);
-                // 重定向後會自動處理，不需要等待結果
+                this.updateLoginStatus('手機設備：使用重定向登入...');
+                
+                // 檢查是否有重定向結果
+                const redirectResult = await getRedirectResult(window.auth);
+                if (redirectResult && redirectResult.user) {
+                    console.log('重定向登入成功:', redirectResult.user.displayName);
+                    this.updateLoginStatus('重定向登入成功！');
+                    this.user = redirectResult.user;
+                    this.isOnlineMode = true;
+                    this.setupFirestoreListener();
+                    this.showNotification(`歡迎，${redirectResult.user.displayName || redirectResult.user.email}！`, 'success');
+                    this.clearLoginStatus();
+                    return;
+                } else {
+                    console.log('沒有重定向結果，啟動重定向流程');
+                    this.updateLoginStatus('正在跳轉到 Google 登入頁面...');
+                    await signInWithRedirect(window.auth, provider);
+                    return; // 重定向會離開頁面
+                }
             } else {
                 console.log('使用彈出視窗登入...');
                 // 桌面端使用彈出視窗
@@ -1811,43 +1829,67 @@ class FirebaseWalletManager {
 let firebaseWalletManager;
 
 document.addEventListener('DOMContentLoaded', () => {
+    console.log('DOM 內容已載入，開始設置事件監聽器');
+    
     firebaseWalletManager = new FirebaseWalletManager();
     window.firebaseWalletManager = firebaseWalletManager; // 設定全域變數以供 onclick 使用
     
-    // 設置按鈕事件監聽器
-    document.getElementById('loginBtn').addEventListener('click', () => {
-        firebaseWalletManager.loginWithGoogle();
-    });
-    
-    document.getElementById('logoutBtn').addEventListener('click', () => {
-        firebaseWalletManager.logout();
-    });
-    
-    document.getElementById('offlineBtn').addEventListener('click', () => {
-        firebaseWalletManager.enableOfflineMode();
-    });
-    
-    // 診斷按鈕監聽器
-    const diagnosBtn = document.getElementById('diagnosBtn');
-    if (diagnosBtn) {
-        diagnosBtn.addEventListener('click', () => {
-            firebaseWalletManager.showDiagnostics();
-        });
-    }
-    
-    // 診斷按鈕監聽器（離線區域中的）
-    const diagnosBtn2 = document.getElementById('diagnosBtn2');
-    if (diagnosBtn2) {
-        diagnosBtn2.addEventListener('click', () => {
-            firebaseWalletManager.showDiagnostics();
-        });
-    }
-    
-    // 重新整理按鈕監聽器
-    const refreshBtn = document.getElementById('refreshBtn');
-    if (refreshBtn) {
-        refreshBtn.addEventListener('click', () => {
-            firebaseWalletManager.refreshOfflineMode();
-        });
-    }
+    // 等待一小段時間確保所有元素都已渲染
+    setTimeout(() => {
+        // 設置按鈕事件監聽器
+        const loginBtn = document.getElementById('loginBtn');
+        if (loginBtn) {
+            loginBtn.addEventListener('click', () => {
+                firebaseWalletManager.loginWithGoogle();
+            });
+            console.log('登入按鈕監聽器已設置');
+        } else {
+            console.error('找不到登入按鈕');
+        }
+        
+        const logoutBtn = document.getElementById('logoutBtn');
+        if (logoutBtn) {
+            logoutBtn.addEventListener('click', () => {
+                firebaseWalletManager.logout();
+            });
+            console.log('登出按鈕監聽器已設置');
+        }
+        
+        const offlineBtn = document.getElementById('offlineBtn');
+        if (offlineBtn) {
+            offlineBtn.addEventListener('click', () => {
+                firebaseWalletManager.enableOfflineMode();
+            });
+            console.log('離線按鈕監聽器已設置');
+        }
+        
+        // 診斷按鈕監聽器
+        const diagnosBtn = document.getElementById('diagnosBtn');
+        if (diagnosBtn) {
+            diagnosBtn.addEventListener('click', () => {
+                firebaseWalletManager.showDiagnostics();
+            });
+            console.log('診斷按鈕監聽器已設置');
+        }
+        
+        // 診斷按鈕監聽器（離線區域中的）
+        const diagnosBtn2 = document.getElementById('diagnosBtn2');
+        if (diagnosBtn2) {
+            diagnosBtn2.addEventListener('click', () => {
+                firebaseWalletManager.showDiagnostics();
+            });
+            console.log('離線區域診斷按鈕監聽器已設置');
+        }
+        
+        // 重新整理按鈕監聽器
+        const refreshBtn = document.getElementById('refreshBtn');
+        if (refreshBtn) {
+            refreshBtn.addEventListener('click', () => {
+                firebaseWalletManager.refreshOfflineMode();
+            });
+            console.log('重新整理按鈕監聽器已設置');
+        }
+        
+        console.log('所有事件監聽器設置完成');
+    }, 500); // 延遲500毫秒確保DOM完全渲染
 });

@@ -78,12 +78,19 @@ self.addEventListener('fetch', function(event) {
               return response;
             }
 
-            // 複製回應並加入快取
-            var responseToCache = response.clone();
-            caches.open(CACHE_NAME)
-              .then(function(cache) {
-                cache.put(event.request, responseToCache);
-              });
+            // 複製回應並加入快取（排除不支援的協議）
+            if (!event.request.url.startsWith('chrome-extension:') && 
+                !event.request.url.startsWith('moz-extension:') &&
+                !event.request.url.startsWith('webkit-extension:')) {
+                var responseToCache = response.clone();
+                caches.open(CACHE_NAME)
+                  .then(function(cache) {
+                    cache.put(event.request, responseToCache);
+                  })
+                  .catch(function(error) {
+                    console.log('緩存失敗:', error);
+                  });
+            }
 
             return response;
           })
