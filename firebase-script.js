@@ -54,19 +54,53 @@ class FirebaseWalletManager {
             console.log('檢查重定向登入結果...');
             
             const result = await getRedirectResult(window.auth);
+            const loginAttempt = sessionStorage.getItem('loginAttempt');
+            
             if (result && result.user) {
+                // 重定向成功
                 console.log('重定向登入成功:', result.user.email);
-                this.showNotification(`歡迎！${result.user.displayName || result.user.email}`, 'success');
+                this.showNotification(`登入成功！歡迎 ${result.user.displayName || result.user.email}`, 'success');
                 
-                // 清除可能的登入狀態標記
+                // 清除登入嘗試標記
                 sessionStorage.removeItem('loginAttempt');
+                
+            } else if (loginAttempt) {
+                // 有登入嘗試但沒有結果
+                const attemptData = JSON.parse(loginAttempt);
+                const timeSinceAttempt = Date.now() - attemptData.timestamp;
+                
+                console.log(`登入嘗試時間: ${timeSinceAttempt}ms 前`);
+                
+                if (timeSinceAttempt < 60000) { // 60秒內
+                    console.log('最近有登入嘗試但沒有結果，可能被阻擋');
+                    
+                    // 清除嘗試標記
+                    sessionStorage.removeItem('loginAttempt');
+                    
+                    // 顯示用戶友好的錯誤訊息
+                    this.showNotification('登入過程可能被中斷。手機用戶建議：1) 確保允許彈出視窗 2) 重新整理頁面再試', 'warning');
+                    
+                    // 提供重試建議
+                    setTimeout(() => {
+                        this.showNotification('如果問題持續，請嘗試使用其他瀏覽器或更新您的瀏覽器', 'info');
+                    }, 5000);
+                }
             } else {
                 console.log('沒有重定向結果');
             }
         } catch (error) {
             console.error('檢查重定向結果時出錯:', error);
-            if (error.code !== 'auth/no-auth-event') {
-                this.showNotification('檢查登入狀態時出錯', 'error');
+            
+            // 清除登入狀態
+            sessionStorage.removeItem('loginAttempt');
+            
+            if (error.code === 'auth/network-request-failed') {
+                this.showNotification('網路連線問題，請檢查網路後重試', 'error');
+            } else if (error.code === 'auth/unauthorized-domain') {
+                this.showNotification('網域授權問題，請聯繫管理員', 'error');
+            } else if (error.code !== 'auth/no-auth-event') {
+                this.showNotification('登入驗證失敗，請重新嘗試', 'error');
+                console.error('重定向錯誤詳細信息:', error);
             }
         }
     }
@@ -209,31 +243,69 @@ class FirebaseWalletManager {
             // 檢查設備類型
             const userAgent = navigator.userAgent;
             const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(userAgent);
+            const isIOS = /iPad|iPhone|iPod/.test(userAgent);
+            const isSafari = /Safari/.test(userAgent) && !/Chrome/.test(userAgent);
             const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
             
-            console.log(`設備檢測: 手機=${isMobile}, PWA=${isStandalone}`);
+            console.log(`設備檢測: 手機=${isMobile}, iOS=${isIOS}, Safari=${isSafari}, PWA=${isStandalone}`);
             
             if (isMobile || isStandalone) {
-                // 手機或 PWA：使用重定向
-                console.log('使用重定向登入');
-                this.showNotification('正在跳轉到 Google 登入頁面...', 'info');
+                // 手機或 PWA：智能登入策略
+                console.log('手機設備：使用智能登入策略');
                 
-                // 標記登入嘗試
-                sessionStorage.setItem('loginAttempt', Date.now().toString());
-                sessionStorage.setItem('loginMethod', 'redirect');
-                
-                // 執行重定向
-                await signInWithRedirect(window.auth, provider);
-                console.log('重定向已執行');
+                try {
+                    // 先嘗試彈出視窗 (某些手機瀏覽器支援)
+                    console.log('嘗試手機彈出視窗登入...');
+                    this.showNotification('正在嘗試最佳登入方式...', 'info');
+                    
+                    const result = await signInWithPopup(window.auth, provider);
+                    if (result && result.user) {
+                        console.log('手機彈出視窗登入成功:', result.user.email);
+                        this.showNotification(`登入成功！歡迎 ${result.user.displayName || result.user.email}`, 'success');
+                        return;
+                    }
+                    
+                } catch (popupError) {
+                    console.log('手機彈出視窗失敗，降級為重定向:', popupError.code);
+                    
+                    // 彈出視窗失敗，使用重定向
+                    if (popupError.code === 'auth/popup-blocked' || 
+                        popupError.code === 'auth/cancelled-popup-request' ||
+                        popupError.code === 'auth/popup-closed-by-user') {
+                        
+                        console.log('執行降級重定向登入...');
+                        this.showNotification('正在跳轉到 Google 登入頁面...', 'info');
+                        
+                        // 確保這是用戶手勢觸發的
+                        if (window.event && window.event.isTrusted) {
+                            console.log('用戶手勢確認，執行重定向');
+                            
+                            // 標記登入嘗試
+                            sessionStorage.setItem('loginAttempt', JSON.stringify({
+                                timestamp: Date.now(),
+                                method: 'redirect_fallback',
+                                userAgent: navigator.userAgent
+                            }));
+                            
+                            await signInWithRedirect(window.auth, provider);
+                            console.log('重定向已執行');
+                            
+                        } else {
+                            throw new Error('需要真實的用戶點擊才能進行重定向登入');
+                        }
+                    } else {
+                        throw popupError;
+                    }
+                }
                 
             } else {
-                // 桌面：使用彈出視窗
-                console.log('使用彈出視窗登入');
+                // 桌面：優先使用彈出視窗
+                console.log('桌面設備：使用彈出視窗登入');
                 this.showNotification('正在開啟登入視窗...', 'info');
                 
                 const result = await signInWithPopup(window.auth, provider);
                 if (result && result.user) {
-                    console.log('彈出視窗登入成功:', result.user.email);
+                    console.log('桌面彈出視窗登入成功:', result.user.email);
                     this.showNotification(`登入成功！歡迎 ${result.user.displayName || result.user.email}`, 'success');
                 }
             }
@@ -243,16 +315,18 @@ class FirebaseWalletManager {
             
             // 清除登入狀態標記
             sessionStorage.removeItem('loginAttempt');
-            sessionStorage.removeItem('loginMethod');
             
             let errorMessage = '登入失敗';
             
             switch (error.code) {
                 case 'auth/popup-blocked':
-                    errorMessage = '彈出視窗被阻擋，請允許彈出視窗並重試';
+                    errorMessage = '彈出視窗被阻擋，請允許彈出視窗後重試';
                     break;
                 case 'auth/popup-closed-by-user':
                     errorMessage = '登入視窗被關閉';
+                    return; // 用戶主動關閉，不顯示錯誤
+                case 'auth/cancelled-popup-request':
+                    errorMessage = '登入請求被取消，請重試';
                     break;
                 case 'auth/network-request-failed':
                     errorMessage = '網路連線失敗，請檢查網路後重試';
@@ -261,14 +335,25 @@ class FirebaseWalletManager {
                     errorMessage = 'Google 登入未啟用';
                     break;
                 case 'auth/unauthorized-domain':
-                    errorMessage = '此網域未授權 Google 登入';
+                    errorMessage = '此網域未授權進行 Google 登入';
                     break;
                 default:
-                    errorMessage = `登入錯誤: ${error.message}`;
+                    if (error.message.includes('用戶點擊')) {
+                        errorMessage = '請直接點擊登入按鈕進行登入';
+                    } else {
+                        errorMessage = `登入錯誤: ${error.message}`;
+                    }
                     console.error('詳細錯誤:', error);
             }
             
             this.showNotification(errorMessage, 'error');
+            
+            // 對於手機用戶提供額外建議
+            if (/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)) {
+                setTimeout(() => {
+                    this.showNotification('手機登入提示：請確保允許彈出視窗，或嘗試重新整理頁面', 'info');
+                }, 3000);
+            }
         }
     }
 
@@ -742,4 +827,32 @@ let firebaseWalletManager;
 
 document.addEventListener('DOMContentLoaded', () => {
     firebaseWalletManager = new FirebaseWalletManager();
+    
+    // 檢測設備類型並顯示對應提示
+    const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+    const mobileHint = document.getElementById('mobileHint');
+    const desktopHint = document.getElementById('desktopHint');
+    
+    if (isMobile) {
+        mobileHint.style.display = 'block';
+        desktopHint.style.display = 'none';
+    } else {
+        mobileHint.style.display = 'none';
+        desktopHint.style.display = 'block';
+    }
+    
+    // 為登入按鈕添加用戶手勢追蹤
+    const loginBtn = document.getElementById('loginBtn');
+    if (loginBtn) {
+        loginBtn.addEventListener('click', (event) => {
+            // 標記這是真實的用戶點擊
+            window.event = event;
+            console.log('用戶手勢檢測:', event.isTrusted ? '真實點擊' : '程式觸發');
+            
+            if (!event.isTrusted && isMobile) {
+                firebaseWalletManager.showNotification('請直接點擊登入按鈕', 'warning');
+                return false;
+            }
+        });
+    }
 });

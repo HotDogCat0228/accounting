@@ -56,9 +56,20 @@
             <div id="loginSection" class="login-section">
                 <p>請登入以同步您的錢包資料</p>
                 <div id="loginStatus" style="display: none; margin: 10px 0; padding: 10px; background: rgba(255,255,255,0.1); border-radius: 5px; color: white; font-size: 0.9rem;"></div>
-                <button id="loginBtn" class="btn btn-primary">Google 登入</button>
+                <button id="loginBtn" class="btn btn-primary">🔐 Google 登入</button>
                 <button id="offlineBtn" class="btn btn-secondary">📱 離線使用</button>
                 <button id="diagnosBtn" class="btn btn-info" style="display: none; margin-top: 10px;">🔍 診斷連接問題</button>
+                <div class="login-hints" style="margin-top: 15px; font-size: 0.8rem; color: rgba(255,255,255,0.8);">
+                    <div id="mobileHint" style="display: none;">
+                        📱 手機用戶提示：<br>
+                        • 請確保允許彈出視窗<br>
+                        • 如登入中斷請重新整理頁面<br>
+                        • 建議使用 Chrome 或 Safari
+                    </div>
+                    <div id="desktopHint" style="display: none;">
+                        💻 點擊「Google 登入」將開啟新視窗進行安全驗證
+                    </div>
+                </div>
                 <p class="offline-hint">離線模式：資料僅儲存在此裝置上</p>
             </div>
             <div id="userSection" class="user-section" style="display: none;">
