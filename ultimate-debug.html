@@ -231,16 +231,51 @@
                 log(`Auth Domain: ${firebaseConfig.authDomain}`);
                 log(`Project ID: ${firebaseConfig.projectId}`);
                 
-                // 檢查網路連線
-                const response = await fetch(`https://${firebaseConfig.authDomain}`);
-                log(`Firebase 連線: ${response.ok ? '✅ 正常' : '❌ 失敗'}`);
+                // 不要直接 fetch Firebase 網域，因為會有 CORS 問題
+                // 改為檢查 Firebase 服務狀態
+                try {
+                    // 測試 Firebase Auth 端點（這個端點允許 CORS）
+                    const authTestUrl = `https://identitytoolkit.googleapis.com/v1/projects/${firebaseConfig.projectId}`;
+                    log(`測試 Firebase Auth 端點: ${authTestUrl}`);
+                    
+                    // 這個測試可能會失敗，但重點是看錯誤類型
+                    const response = await fetch(authTestUrl);
+                    log(`Auth 端點回應: ${response.status}`);
+                    
+                } catch (fetchError) {
+                    // CORS 錯誤表示端點存在，403/401 錯誤是正常的
+                    if (fetchError.message.includes('CORS')) {
+                        log('✅ Firebase Auth 端點存在 (CORS 錯誤是正常的)');
+                    } else if (fetchError.message.includes('403') || fetchError.message.includes('401')) {
+                        log('✅ Firebase Auth 端點正常 (需要授權是正常的)');
+                    } else {
+                        log(`⚠️ Auth 端點測試: ${fetchError.message}`);
+                    }
+                }
                 
-                // 檢查 Auth 服務
+                // 檢查 Auth 初始化
                 if (auth) {
                     log('✅ Firebase Auth 已初始化');
                     log(`當前用戶: ${auth.currentUser ? auth.currentUser.email : '無'}`);
+                    log(`Auth 狀態: ${auth.currentUser ? '已登入' : '未登入'}`);
                 } else {
                     log('❌ Firebase Auth 未初始化');
+                }
+                
+                // 檢查授權網域
+                log(`當前網域: ${window.location.origin}`);
+                log(`Auth Domain: https://${firebaseConfig.authDomain}`);
+                
+                // 檢查是否在授權的網域上
+                const isAuthorizedDomain = 
+                    window.location.hostname === 'hotdogcat0228.github.io' ||
+                    window.location.hostname === 'localhost' ||
+                    window.location.hostname === '127.0.0.1';
+                
+                log(`授權網域檢查: ${isAuthorizedDomain ? '✅ 通過' : '❌ 失敗'}`);
+                
+                if (!isAuthorizedDomain) {
+                    log('⚠️ 警告: 當前網域可能未授權 Google 登入');
                 }
                 
                 showStatus('Firebase 狀態檢查完成', 'success');
