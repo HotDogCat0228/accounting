@@ -200,15 +200,22 @@ class FirebaseWalletManager {
             // 用戶已登入
             this.showUserSection(user);
             this.hideLoginSection();
+            this.hideOfflineSection();
             this.showWalletSection();
             this.setupFirestoreListener();
         } else {
             // 用戶已登出
-            this.showLoginSection();
+            if (!this.isOfflineMode) {
+                this.showLoginSection();
+            }
             this.hideUserSection();
-            this.hideWalletSection();
-            this.clearFirestoreListener();
-            this.wallets = [];
+            this.hideOfflineSection();
+            
+            if (!this.isOfflineMode) {
+                this.hideWalletSection();
+                this.clearFirestoreListener();
+                this.wallets = [];
+            }
         }
     }
 
@@ -226,6 +233,16 @@ class FirebaseWalletManager {
     // 隱藏用戶資訊區域
     hideUserSection() {
         document.getElementById('userSection').style.display = 'none';
+    }
+
+    // 顯示離線區域
+    showOfflineSection() {
+        document.getElementById('offlineSection').style.display = 'flex';
+    }
+
+    // 隱藏離線區域
+    hideOfflineSection() {
+        document.getElementById('offlineSection').style.display = 'none';
     }
 
     // 顯示登入區域
@@ -419,8 +436,12 @@ class FirebaseWalletManager {
     enableOfflineMode() {
         this.isOfflineMode = true;
         
-        // 隱藏登入區域
-        document.getElementById('loginSection').style.display = 'none';
+        // 隱藏登入區域和用戶區域
+        this.hideLoginSection();
+        this.hideUserSection();
+        
+        // 顯示離線狀態區域
+        this.showOfflineSection();
         
         // 顯示錢包區域
         this.showWalletSection();
@@ -432,10 +453,42 @@ class FirebaseWalletManager {
         // 顯示離線模式通知
         this.showNotification('已切換到離線模式', 'info');
         
-        // 顯示診斷按鈕
-        document.getElementById('diagnosBtn').style.display = 'inline-block';
-        
         console.log('已啟用離線模式');
+    }
+    
+    // 刷新離線模式
+    refreshOfflineMode() {
+        // 重新載入錢包資料
+        this.wallets = this.loadWalletsFromLocal();
+        this.renderWallets();
+        
+        // 提供選項讓用戶選擇是否嘗試重新連線
+        const choice = confirm('離線模式刷新完成！\n\n是否要嘗試重新連接線上模式？\n\n注意：如果連接失敗，將繼續使用離線模式。');
+        
+        if (choice) {
+            this.showNotification('嘗試重新連接...', 'info');
+            
+            // 重置狀態
+            this.isOfflineMode = false;
+            
+            // 隱藏離線區域
+            document.getElementById('offlineSection').style.display = 'none';
+            
+            // 顯示登入區域
+            document.getElementById('loginSection').style.display = 'block';
+            
+            // 嘗試重新初始化 Firebase
+            this.waitForFirebase().then(() => {
+                this.init();
+                this.showNotification('已重新初始化，可嘗試登入', 'success');
+            }).catch(error => {
+                console.error('重新連接失敗:', error);
+                this.showNotification('連接失敗，返回離線模式', 'warning');
+                this.enableOfflineMode();
+            });
+        } else {
+            this.showNotification('離線資料已刷新', 'success');
+        }
     }
     
     // 顯示診斷信息
@@ -1617,8 +1670,13 @@ document.addEventListener('DOMContentLoaded', () => {
         firebaseWalletManager.enableOfflineMode();
     });
     
-    // 診斷按鈕監聽器
-    document.getElementById('diagnosBtn').addEventListener('click', () => {
+    // 診斷按鈕監聽器（離線區域中的）
+    document.getElementById('diagnosBtn2').addEventListener('click', () => {
         firebaseWalletManager.showDiagnostics();
+    });
+    
+    // 重新整理按鈕監聽器
+    document.getElementById('refreshBtn').addEventListener('click', () => {
+        firebaseWalletManager.refreshOfflineMode();
     });
 });
