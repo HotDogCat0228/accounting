@@ -1,4 +1,4 @@
-const CACHE_NAME = 'wallet-app-v1.0.0';
+const CACHE_NAME = 'wallet-app-v1.0.1';
 const urlsToCache = [
   './',
   './index.html',
@@ -9,11 +9,11 @@ const urlsToCache = [
   // Firebase SDK
   'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js',
   'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js',
-  'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js',
-  // Icons (will be added later)
-  './icons/icon-192x192.png',
-  './icons/icon-512x512.png',
-  './icons/apple-touch-icon.png'
+  'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js'
+  // 暫時移除圖標，因為它們不存在
+  // './icons/icon-192x192.png',
+  // './icons/icon-512x512.png', 
+  // './icons/apple-touch-icon.png'
 ];
 
 // 安裝 Service Worker

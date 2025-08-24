@@ -5,91 +5,27 @@ class FirebaseWalletManager {
         this.wallets = [];
         this.currentEditingWallet = null;
         this.currentTransactionWallet = null;
-        this.currentViewingWallet = null;
-        this.currentEditingTransaction = null;
         this.transactionType = null;
         this.unsubscribe = null;
-        this.isOfflineMode = false;
-        
-        // 檢測 iPhone PWA 並提供早期提示
-        const isIPhone = /iPhone|iPod/i.test(navigator.userAgent);
-        const isPWA = window.navigator.standalone === true || window.matchMedia('(display-mode: standalone)').matches;
-        
-        if (isIPhone && isPWA) {
-            console.log('檢測到 iPhone PWA 模式，將優化體驗');
-            this.isIPhonePWA = true;
-            
-            // 設置標記，在 DOM 準備好後自動啟用離線模式
-            this.autoEnableOffline = true;
-        } else {
-            this.isIPhonePWA = false;
-            this.autoEnableOffline = false;
-        }
         
         // 等待 Firebase 初始化完成
         this.waitForFirebase().then(() => {
             this.init();
-        }).catch(() => {
-            // Firebase 初始化失敗，啟用離線模式
-            console.warn('Firebase 初始化失敗，自動切換到離線模式');
-            this.enableOfflineMode();
         });
     }
 
     // 等待 Firebase 載入完成
     async waitForFirebase() {
-        return new Promise((resolve, reject) => {
-            let attempts = 0;
-            const maxAttempts = 100; // 10秒
-            
+        return new Promise((resolve) => {
             const checkFirebase = () => {
-                console.log(`Firebase檢查嘗試 ${attempts + 1}/${maxAttempts}`);
-                
                 if (window.db && window.auth) {
-                    console.log('Firebase初始化成功');
-                    
-                    // 測試Firebase連接
-                    this.testFirebaseConnection()
-                        .then(() => {
-                            console.log('Firebase連接測試成功');
-                            resolve();
-                        })
-                        .catch((error) => {
-                            console.error('Firebase連接測試失敗:', error);
-                            // 即使連接測試失敗，也繼續初始化，讓用戶可以嘗試登入
-                            resolve();
-                        });
-                } else if (attempts >= maxAttempts) {
-                    console.error('Firebase載入超時');
-                    reject(new Error('Firebase 載入超時'));
+                    resolve();
                 } else {
-                    attempts++;
                     setTimeout(checkFirebase, 100);
                 }
             };
-            
             checkFirebase();
         });
-    }
-    
-    // 測試Firebase連接
-    async testFirebaseConnection() {
-        try {
-            // 嘗試獲取當前認證狀態
-            return new Promise((resolve, reject) => {
-                const timeout = setTimeout(() => {
-                    reject(new Error('Firebase連接超時'));
-                }, 5000);
-                
-                const unsubscribe = window.auth.onAuthStateChanged((user) => {
-                    clearTimeout(timeout);
-                    unsubscribe();
-                    resolve(user);
-                });
-            });
-        } catch (error) {
-            throw new Error('Firebase服務無法訪問: ' + error.message);
-        }
     }
 
     // 初始化應用程式
@@ -100,112 +36,20 @@ class FirebaseWalletManager {
         // 隱藏錢包容器直到用戶登入
         document.getElementById('walletsContainer').style.display = 'none';
         document.getElementById('addWalletBtn').style.display = 'none';
-        
-        // 檢測手機端並優化體驗
-        this.optimizeForMobile();
-        
-        // iPhone PWA 自動離線模式（但不要立即啟用，給用戶選擇機會）
-        if (this.autoEnableOffline) {
-            setTimeout(() => {
-                if (!this.user && !this.isOfflineMode) {
-                    console.log('iPhone PWA 延遲提示');
-                    // 不要自動啟用，而是提供友好提示
-                    this.showNotification('iPhone PWA 檢測：如果登入有問題，建議使用離線模式！', 'info');
-                    
-                    // 讓離線按鈕更明顯
-                    const offlineBtn = document.getElementById('offlineBtn');
-                    if (offlineBtn) {
-                        offlineBtn.style.animation = 'pulse 2s infinite';
-                        offlineBtn.style.background = 'linear-gradient(45deg, #28a745, #20c997)';
-                    }
-                }
-            }, 5000); // 給用戶5秒時間嘗試登入
-        }
-    }
-    
-    // 手機端優化
-    optimizeForMobile() {
-        const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-        
-        if (isMobile) {
-            // 為手機端添加特殊樣式類
-            document.body.classList.add('mobile-device');
-            
-            // 3秒後如果還沒登入，提示使用離線模式
-            setTimeout(() => {
-                if (!this.user && !this.isOfflineMode) {
-                    const offlineBtn = document.getElementById('offlineBtn');
-                    offlineBtn.style.animation = 'pulse 2s infinite';
-                    
-                    // 添加脈衝動畫
-                    const style = document.createElement('style');
-                    style.textContent = `
-                        @keyframes pulse {
-                            0% { transform: scale(1); }
-                            50% { transform: scale(1.05); }
-                            100% { transform: scale(1); }
-                        }
-                    `;
-                    document.head.appendChild(style);
-                    
-                    this.showNotification('手機端建議使用離線模式獲得最佳體驗', 'info');
-                }
-            }, 3000);
-        }
     }
 
     // 設定驗證狀態監聽器
     setupAuthListener() {
-        console.log('設定Firebase Auth監聽器...');
+        const { onAuthStateChanged } = window.authModule || {};
         
         // 使用動態導入來載入 Firebase Auth 模組
         import('https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js')
             .then(({ onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, signOut }) => {
-                console.log('Firebase Auth模組載入成功');
+                window.authModule = { onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, signOut };
                 
-                window.authModule = { 
-                    onAuthStateChanged, 
-                    GoogleAuthProvider, 
-                    signInWithPopup, 
-                    signInWithRedirect, 
-                    getRedirectResult, 
-                    signOut 
-                };
-                
-                // 先檢查重定向結果 (用於手機端)
-                getRedirectResult(window.auth).then((result) => {
-                    if (result && result.user) {
-                        console.log('重定向登入成功:', result.user.displayName);
-                        this.showNotification('登入成功！', 'success');
-                    }
-                }).catch((error) => {
-                    if (error.code && error.code !== 'auth/no-redirect-operation') {
-                        console.error('重定向登入失敗:', error);
-                        // 不自動切換到離線模式，讓用戶選擇
-                    }
-                });
-                
-                // 設定認證狀態監聽器
                 onAuthStateChanged(window.auth, (user) => {
-                    console.log('認證狀態變更:', user ? '已登入' : '未登入');
                     this.handleAuthStateChange(user);
                 });
-                
-                console.log('Firebase Auth設定完成');
-            })
-            .catch((error) => {
-                console.error('Firebase Auth 模組載入失敗:', error);
-                this.showNotification('Firebase載入失敗，建議使用離線模式', 'warning');
-                
-                // 延遲5秒後提示，給用戶時間看到錯誤信息
-                setTimeout(() => {
-                    if (!this.user && !this.isOfflineMode) {
-                        const useOffline = confirm('Firebase服務無法連接，是否使用離線模式？\n\n離線模式提供完整的記帳功能，資料儲存在您的設備上。');
-                        if (useOffline) {
-                            this.enableOfflineMode();
-                        }
-                    }
-                }, 5000);
             });
     }
 
@@ -217,22 +61,15 @@ class FirebaseWalletManager {
             // 用戶已登入
             this.showUserSection(user);
             this.hideLoginSection();
-            this.hideOfflineSection();
             this.showWalletSection();
             this.setupFirestoreListener();
         } else {
             // 用戶已登出
-            if (!this.isOfflineMode) {
-                this.showLoginSection();
-            }
+            this.showLoginSection();
             this.hideUserSection();
-            this.hideOfflineSection();
-            
-            if (!this.isOfflineMode) {
-                this.hideWalletSection();
-                this.clearFirestoreListener();
-                this.wallets = [];
-            }
+            this.hideWalletSection();
+            this.clearFirestoreListener();
+            this.wallets = [];
         }
     }
 
@@ -249,46 +86,17 @@ class FirebaseWalletManager {
 
     // 隱藏用戶資訊區域
     hideUserSection() {
-        const userSection = document.getElementById('userSection');
-        if (userSection) {
-            userSection.style.display = 'none';
-        }
-    }
-
-    // 顯示離線區域
-    showOfflineSection() {
-        console.log('顯示離線區域');
-        const offlineSection = document.getElementById('offlineSection');
-        if (offlineSection) {
-            offlineSection.style.display = 'flex';
-            console.log('離線區域已設置為顯示');
-        } else {
-            console.error('找不到離線區域元素');
-        }
-    }
-
-    // 隱藏離線區域
-    hideOfflineSection() {
-        const offlineSection = document.getElementById('offlineSection');
-        if (offlineSection) {
-            offlineSection.style.display = 'none';
-        }
+        document.getElementById('userSection').style.display = 'none';
     }
 
     // 顯示登入區域
     showLoginSection() {
-        const loginSection = document.getElementById('loginSection');
-        if (loginSection) {
-            loginSection.style.display = 'block';
-        }
+        document.getElementById('loginSection').style.display = 'block';
     }
 
     // 隱藏登入區域
     hideLoginSection() {
-        const loginSection = document.getElementById('loginSection');
-        if (loginSection) {
-            loginSection.style.display = 'none';
-        }
+        document.getElementById('loginSection').style.display = 'none';
     }
 
     // 顯示錢包區域
@@ -339,212 +147,38 @@ class FirebaseWalletManager {
     // Google 登入
     async loginWithGoogle() {
         try {
-            console.log('開始Google登入流程...');
-            
-            // 顯示登入狀態
-            this.updateLoginStatus('正在初始化 Firebase...');
-            
-            // 檢查Firebase是否正確初始化
-            if (!window.auth) {
-                throw new Error('Firebase Auth 尚未初始化');
-            }
+            // 檢查是否為手機設備
+            const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
             
             if (!window.authModule) {
                 throw new Error('Firebase Auth 模組尚未載入');
             }
             
-            this.updateLoginStatus('Firebase 已就緒，開始登入...');
-            
-            // 檢查域名授權
-            const currentDomain = window.location.hostname;
-            const authDomain = window.firebaseConfig?.authDomain;
-            console.log(`當前域名: ${currentDomain}, Firebase Auth域名: ${authDomain}`);
-            
-            if (currentDomain === 'hotdogcat0228.github.io' && authDomain && !authDomain.includes('github.io')) {
-                console.warn('域名可能未授權！');
-                this.updateLoginStatus('警告：域名可能未在 Firebase 中授權');
-            }
-            
-            // 檢查是否為移動設備和PWA
-            const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-            const isIOS = /iPad|iPhone|iPod/i.test(navigator.userAgent);
-            const isPWA = window.navigator.standalone === true || window.matchMedia('(display-mode: standalone)').matches;
-            const isSafari = /Safari/i.test(navigator.userAgent) && !/Chrome|CriOS|FxiOS|EdgiOS/i.test(navigator.userAgent);
-            
-            console.log(`設備環境: 手機=${isMobile}, iOS=${isIOS}, PWA=${isPWA}, Safari=${isSafari}`);
-            
-            // 特殊的 iPhone PWA 測試
-            if (isIOS && isPWA) {
-                // 檢查是否能創建 GoogleAuthProvider
-                try {
-                    const testProvider = new GoogleAuthProvider();
-                    console.log('GoogleAuthProvider 創建成功');
-                    this.updateLoginStatus('Google 服務可用，準備登入...');
-                } catch (providerError) {
-                    console.error('無法創建 GoogleAuthProvider:', providerError);
-                    this.updateLoginStatus('Google 服務不可用：' + providerError.message);
-                    throw providerError;
-                }
-            }
-            
             const { GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult } = window.authModule;
             const provider = new GoogleAuthProvider();
             
-            // 設定OAuth範圍
-            provider.addScope('profile');
-            provider.addScope('email');
-            
-            // iPhone PWA 有特殊限制，但先讓用戶嘗試登入
-            if (isIOS && isPWA) {
-                console.log('檢測到 iPhone PWA 模式，嘗試登入...');
-                this.updateLoginStatus('iPhone PWA：正在嘗試 Google 登入...');
-                
-                // 直接嘗試登入，不要預先警告
+            if (isMobile) {
+                // 手機端：先檢查重定向結果，然後使用重定向
                 try {
-                    console.log('iPhone PWA 嘗試彈出視窗登入...');
-                    this.updateLoginStatus('正在打開 Google 登入視窗...');
-                    
-                    // 測試彈出視窗是否被阻擋
-                    const testPopup = window.open('', '_blank', 'width=1,height=1');
-                    if (testPopup) {
-                        testPopup.close();
-                        console.log('彈出視窗測試：允許');
-                        this.updateLoginStatus('彈出視窗可用，正在登入...');
-                    } else {
-                        console.log('彈出視窗測試：被阻擋');
-                        this.updateLoginStatus('彈出視窗被阻擋，使用重定向方式...');
-                        localStorage.setItem('lastLoginError', 'popup-blocked: iPhone PWA 阻擋彈出視窗');
-                        await signInWithRedirect(window.auth, provider);
+                    const redirectResult = await getRedirectResult(window.auth);
+                    if (redirectResult && redirectResult.user) {
+                        this.showNotification('登入成功！', 'success');
                         return;
                     }
-                    
-                    const result = await signInWithPopup(window.auth, provider);
-                    
-                    if (result && result.user) {
-                        console.log('iPhone PWA 登入成功!', result.user.displayName);
-                        this.updateLoginStatus('登入成功！正在載入資料...');
-                        this.user = result.user;
-                        this.isOnlineMode = true;
-                        this.setupFirestoreListener();
-                        this.showNotification(`歡迎，${result.user.displayName || result.user.email}！`, 'success');
-                        this.clearLoginStatus();
-                        return; // 成功登入，直接返回
-                    }
-                } catch (pwaError) {
-                    console.error('iPhone PWA 彈出視窗登入失敗:', pwaError);
-                    this.updateLoginStatus('彈出視窗失敗，嘗試重定向方式...');
-                    
-                    // 嘗試重定向方式
-                    try {
-                        console.log('嘗試重定向登入...');
-                        await signInWithRedirect(window.auth, provider);
-                        return; // 重定向會離開頁面
-                    } catch (redirectError) {
-                        console.error('iPhone PWA 重定向也失敗:', redirectError);
-                        this.updateLoginStatus('登入失敗：' + redirectError.message);
-                        throw new Error('iPhone PWA 登入完全失敗: ' + redirectError.message);
-                    }
+                } catch (redirectError) {
+                    console.log('檢查重定向結果失敗:', redirectError);
                 }
-            } else if (isMobile || isIOS) {
-                console.log('使用重定向登入...');
-                this.updateLoginStatus('手機設備：使用重定向登入...');
                 
-                // 檢查是否有重定向結果
-                const redirectResult = await getRedirectResult(window.auth);
-                if (redirectResult && redirectResult.user) {
-                    console.log('重定向登入成功:', redirectResult.user.displayName);
-                    this.updateLoginStatus('重定向登入成功！');
-                    this.user = redirectResult.user;
-                    this.isOnlineMode = true;
-                    this.setupFirestoreListener();
-                    this.showNotification(`歡迎，${redirectResult.user.displayName || redirectResult.user.email}！`, 'success');
-                    this.clearLoginStatus();
-                    return;
-                } else {
-                    console.log('沒有重定向結果，啟動重定向流程');
-                    this.updateLoginStatus('正在跳轉到 Google 登入頁面...');
-                    await signInWithRedirect(window.auth, provider);
-                    return; // 重定向會離開頁面
-                }
+                // 沒有重定向結果，啟動重定向流程
+                await signInWithRedirect(window.auth, provider);
             } else {
-                console.log('使用彈出視窗登入...');
-                // 桌面端使用彈出視窗
-                const result = await signInWithPopup(window.auth, provider);
-                console.log('登入成功:', result.user.displayName);
+                // 桌面端：使用彈出視窗
+                await signInWithPopup(window.auth, provider);
                 this.showNotification('登入成功！', 'success');
             }
         } catch (error) {
-            console.error('登入錯誤詳細信息:', error);
-            
-            let errorMessage = '登入失敗：';
-            let shouldOfferOffline = false;
-            
-            // 根據錯誤類型提供具體的錯誤信息
-            switch (error.code) {
-                case 'auth/popup-blocked':
-                    errorMessage += 'iPhone Safari/PWA 阻擋了彈出視窗';
-                    shouldOfferOffline = true;
-                    break;
-                case 'auth/popup-closed-by-user':
-                    errorMessage += '登入視窗被關閉';
-                    shouldOfferOffline = true;
-                    break;
-                case 'auth/unauthorized-domain':
-                    errorMessage += 'GitHub Pages 域名未在 Firebase 中授權';
-                    shouldOfferOffline = true;
-                    break;
-                case 'auth/network-request-failed':
-                    errorMessage += '網路連線問題';
-                    shouldOfferOffline = true;
-                    break;
-                case 'auth/too-many-requests':
-                    errorMessage += '嘗試次數過多，請稍後再試';
-                    break;
-                default:
-                    if (error.message.includes('iPhone PWA 登入限制')) {
-                        errorMessage += 'iPhone PWA 模式限制，建議使用離線模式';
-                        shouldOfferOffline = true;
-                    } else if (error.message.includes('Firebase Auth')) {
-                        errorMessage += 'Firebase服務問題';
-                        shouldOfferOffline = true;
-                    } else {
-                        errorMessage += error.message || '未知錯誤';
-                        shouldOfferOffline = true;
-                    }
-            }
-            
-            this.showNotification(errorMessage, 'error');
-            
-            // 顯示診斷按鈕供用戶檢查連線問題
-            const diagnosBtn = document.getElementById('diagnosBtn');
-            if (diagnosBtn) {
-                diagnosBtn.style.display = 'inline-block';
-            }
-            
-            // 詳細錯誤記錄
-            console.error('===== 登入失敗詳細資訊 =====');
-            console.error('錯誤代碼:', error.code);
-            console.error('錯誤訊息:', error.message);
-            console.error('完整錯誤:', error);
-            console.error('當前URL:', window.location.href);
-            console.error('User Agent:', navigator.userAgent);
-            console.error('===========================');
-            
-            // 保存錯誤信息供診斷使用
-            localStorage.setItem('lastLoginError', `${error.code}: ${error.message}`);
-            localStorage.setItem('lastLoginTime', new Date().toISOString());
-            
-            // 如果適合，詢問是否使用離線模式（但不要自動觸發）
-            if (shouldOfferOffline) {
-                setTimeout(() => {
-                    const userChoice = confirm(errorMessage + '\n\n詳細錯誤：' + error.code + '\n\n是否改用離線模式？離線模式提供完整功能。');
-                    if (userChoice) {
-                        this.enableOfflineMode();
-                    } else {
-                        console.log('用戶選擇不使用離線模式，停留在登入頁面');
-                    }
-                }, 3000); // 延長到3秒，讓用戶看清楚錯誤信息
-            }
+            console.error('登入失敗:', error);
+            this.showNotification('登入失敗，請重試', 'error');
         }
     }
 
@@ -560,291 +194,14 @@ class FirebaseWalletManager {
         }
     }
 
-    // 啟用離線模式
-    enableOfflineMode() {
-        console.log('開始啟用離線模式');
-        this.isOfflineMode = true;
-        
-        // 隱藏登入區域和用戶區域
-        console.log('隱藏登入和用戶區域');
-        this.hideLoginSection();
-        this.hideUserSection();
-        
-        // 顯示離線狀態區域
-        console.log('顯示離線狀態區域');
-        this.showOfflineSection();
-        
-        // 顯示錢包區域
-        console.log('顯示錢包區域');
-        this.showWalletSection();
-        
-        // 從本地儲存載入錢包資料
-        this.wallets = this.loadWalletsFromLocal();
-        this.renderWallets();
-        
-        // 顯示離線模式通知
-        this.showNotification('已切換到離線模式', 'info');
-        
-        console.log('離線模式啟用完成');
-    }
-    
-    // 更新登入狀態顯示
-    updateLoginStatus(message) {
-        const statusElement = document.getElementById('loginStatus');
-        if (statusElement) {
-            statusElement.textContent = message;
-            statusElement.style.display = 'block';
-            console.log('登入狀態:', message);
-        }
-    }
-    
-    // 清除登入狀態顯示
-    clearLoginStatus() {
-        const statusElement = document.getElementById('loginStatus');
-        if (statusElement) {
-            statusElement.style.display = 'none';
-        }
-    }
-    
-    // 刷新離線模式
-    refreshOfflineMode() {
-        // 重新載入錢包資料
-        this.wallets = this.loadWalletsFromLocal();
-        this.renderWallets();
-        
-        // 提供選項讓用戶選擇是否嘗試重新連線
-        const choice = confirm('離線模式刷新完成！\n\n是否要嘗試重新連接線上模式？\n\n注意：如果連接失敗，將繼續使用離線模式。');
-        
-        if (choice) {
-            this.showNotification('嘗試重新連接...', 'info');
-            
-            // 重置狀態
-            this.isOfflineMode = false;
-            
-            // 隱藏離線區域
-            document.getElementById('offlineSection').style.display = 'none';
-            
-            // 顯示登入區域
-            document.getElementById('loginSection').style.display = 'block';
-            
-            // 嘗試重新初始化 Firebase
-            this.waitForFirebase().then(() => {
-                this.init();
-                this.showNotification('已重新初始化，可嘗試登入', 'success');
-            }).catch(error => {
-                console.error('重新連接失敗:', error);
-                this.showNotification('連接失敗，返回離線模式', 'warning');
-                this.enableOfflineMode();
-            });
-        } else {
-            this.showNotification('離線資料已刷新', 'success');
-        }
-    }
-    
-    // 顯示診斷信息
-    showDiagnostics() {
-        const diagnostics = [];
-        
-        // 檢查Firebase狀態
-        diagnostics.push('=== Firebase 診斷報告 ===');
-        diagnostics.push(`Firebase App: ${window.firebaseApp ? '✅ 已載入' : '❌ 未載入'}`);
-        diagnostics.push(`Firebase Auth: ${window.auth ? '✅ 已載入' : '❌ 未載入'}`);
-        diagnostics.push(`Firebase DB: ${window.db ? '✅ 已載入' : '❌ 未載入'}`);
-        diagnostics.push(`Auth Module: ${window.authModule ? '✅ 已載入' : '❌ 未載入'}`);
-        
-        // 檢查網路狀態
-        diagnostics.push('');
-        diagnostics.push('=== 網路狀態 ===');
-        diagnostics.push(`線上狀態: ${navigator.onLine ? '✅ 在線' : '❌ 離線'}`);
-        diagnostics.push(`用戶代理: ${navigator.userAgent.slice(0, 50)}...`);
-        
-        // 檢查設備類型
-        const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-        const isIPhone = /iPhone|iPod/i.test(navigator.userAgent);
-        const isIOS = /iPad|iPhone|iPod/i.test(navigator.userAgent);
-        const isPWA = window.navigator.standalone === true || window.matchMedia('(display-mode: standalone)').matches;
-        
-        diagnostics.push(`設備類型: ${isMobile ? '📱 手機' : '💻 桌面'}`);
-        diagnostics.push(`iOS 設備: ${isIOS ? '✅ 是' : '❌ 否'}`);
-        diagnostics.push(`iPhone: ${isIPhone ? '✅ 是' : '❌ 否'}`);
-        diagnostics.push(`PWA 模式: ${isPWA ? '✅ 是' : '❌ 否'}`);
-        diagnostics.push(`Safari 版本: ${navigator.userAgent.match(/Version\/([0-9._]+)/)?.[1] || '未知'}`);
-        
-        // 檢查當前域名
-        diagnostics.push('');
-        diagnostics.push('=== 域名信息 ===');
-        diagnostics.push(`當前域名: ${window.location.hostname}`);
-        diagnostics.push(`完整URL: ${window.location.href}`);
-        diagnostics.push(`協議: ${window.location.protocol}`);
-        diagnostics.push(`端口: ${window.location.port || '默認端口'}`);
-        
-        // 檢查localStorage
-        diagnostics.push('');
-        diagnostics.push('=== 存儲狀態 ===');
-        try {
-            localStorage.setItem('test', 'test');
-            localStorage.removeItem('test');
-            diagnostics.push('LocalStorage: ✅ 可用');
-        } catch (e) {
-            diagnostics.push('LocalStorage: ❌ 不可用');
-        }
-        
-        // 顯示離線錢包數量
-        const offlineWallets = this.loadWalletsFromLocal();
-        diagnostics.push(`離線錢包數量: ${offlineWallets.length}`);
-        
-        // 顯示 Firebase 配置信息以供調試
-        diagnostics.push('');
-        diagnostics.push('=== Firebase 配置 ===');
-        diagnostics.push(`項目 ID: ${window.firebaseConfig?.projectId || '未知'}`);
-        diagnostics.push(`Auth 域名: ${window.firebaseConfig?.authDomain || '未知'}`);
-        diagnostics.push(`當前域名: ${window.location.hostname}`);
-        diagnostics.push(`當前完整URL: ${window.location.href}`);
-        
-        // 檢查授權域名狀態
-        if (window.location.hostname === 'hotdogcat0228.github.io') {
-            diagnostics.push(`GitHub Pages 域名: ✅ 已配置`);
-        } else if (window.location.hostname === 'localhost') {
-            diagnostics.push(`本地開發: ✅ 通常允許`);
-        } else {
-            diagnostics.push(`域名狀態: ⚠️  需要檢查授權`);
-        }
-        
-        // 檢查最近的登入錯誤
-        const lastError = localStorage.getItem('lastLoginError');
-        if (lastError) {
-            diagnostics.push('');
-            diagnostics.push('=== 最近登入錯誤 ===');
-            diagnostics.push(`錯誤: ${lastError}`);
-        }
-        
-        // iPhone PWA 特殊說明
-        if (isIPhone && isPWA) {
-            diagnostics.push('');
-            diagnostics.push('=== iPhone PWA 特別說明 ===');
-            diagnostics.push('⚠️  iPhone PWA 模式限制:');
-            diagnostics.push('• Safari PWA 模式限制第三方登入');
-            diagnostics.push('• Google OAuth 彈出視窗被阻擋');
-            diagnostics.push('• 建議使用離線模式獲得完整體驗');
-            diagnostics.push('• 離線模式資料安全且功能完整');
-        }
-        
-        // 顯示結果
-        const message = diagnostics.join('\n');
-        console.log(message);
-        
-        // 創建診斷結果彈出視窗
-        const diagModal = document.createElement('div');
-        diagModal.style.cssText = `
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0,0,0,0.8);
-            z-index: 10000;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: 20px;
-        `;
-        
-        diagModal.innerHTML = `
-            <div style="
-                background: white;
-                padding: 20px;
-                border-radius: 10px;
-                max-width: 500px;
-                max-height: 80vh;
-                overflow-y: auto;
-                font-family: monospace;
-                font-size: 12px;
-                line-height: 1.4;
-            ">
-                <h3 style="margin-top: 0;">Firebase 連接診斷</h3>
-                <pre style="white-space: pre-wrap; margin: 10px 0;">${message}</pre>
-                <div style="text-align: center; margin-top: 20px;">
-                    <button onclick="this.parentElement.parentElement.parentElement.remove()" 
-                            style="padding: 10px 20px; background: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer;">
-                        關閉
-                    </button>
-                </div>
-            </div>
-        `;
-        
-        document.body.appendChild(diagModal);
-        
-        // 點擊背景關閉
-        diagModal.addEventListener('click', (e) => {
-            if (e.target === diagModal) {
-                diagModal.remove();
-            }
-        });
-    }
-
-    // 從本地儲存載入錢包
-    loadWalletsFromLocal() {
-        const saved = localStorage.getItem('wallets');
-        const wallets = saved ? JSON.parse(saved) : [];
-        
-        // 遷移舊數據：為沒有ID的交易添加ID
-        wallets.forEach(wallet => {
-            if (wallet.transactions) {
-                wallet.transactions.forEach(transaction => {
-                    if (!transaction.id) {
-                        transaction.id = this.generateId();
-                    }
-                });
-            }
-        });
-        
-        return wallets;
-    }
-
-    // 儲存錢包到本地儲存
-    saveWalletsToLocal() {
-        localStorage.setItem('wallets', JSON.stringify(this.wallets));
-    }
-
-    // 生成唯一ID
-    generateId() {
-        return Date.now().toString(36) + Math.random().toString(36).substr(2);
-    }
-
     // 綁定事件監聽器
     bindEvents() {
         // 登入登出按鈕
         document.getElementById('loginBtn').addEventListener('click', () => {
             this.loginWithGoogle();
         });
-        
-        // 離線模式按鈕
-        document.getElementById('offlineBtn').addEventListener('click', () => {
-            this.enableOfflineMode();
-        });
-        
-        // 添加觸控支援
-        document.getElementById('loginBtn').addEventListener('touchend', (e) => {
-            e.preventDefault();
-            this.loginWithGoogle();
-        });
-        
-        document.getElementById('offlineBtn').addEventListener('touchend', (e) => {
-            e.preventDefault();
-            this.enableOfflineMode();
-        });
-        
-        // 診斷按鈕
-        document.getElementById('diagnosBtn').addEventListener('click', () => {
-            this.showDiagnostics();
-        });
 
         document.getElementById('logoutBtn').addEventListener('click', () => {
-            this.logout();
-        });
-        
-        document.getElementById('logoutBtn').addEventListener('touchend', (e) => {
-            e.preventDefault();
             this.logout();
         });
 
@@ -852,28 +209,13 @@ class FirebaseWalletManager {
         document.getElementById('addWalletBtn').addEventListener('click', () => {
             this.showAddWalletModal();
         });
-        
-        document.getElementById('addWalletBtn').addEventListener('touchend', (e) => {
-            e.preventDefault();
-            this.showAddWalletModal();
-        });
 
         // 新增錢包相關事件
         document.getElementById('saveWalletBtn').addEventListener('click', () => {
             this.saveWallet();
         });
-        
-        document.getElementById('saveWalletBtn').addEventListener('touchend', (e) => {
-            e.preventDefault();
-            this.saveWallet();
-        });
 
         document.getElementById('cancelBtn').addEventListener('click', () => {
-            this.hideAddWalletModal();
-        });
-        
-        document.getElementById('cancelBtn').addEventListener('touchend', (e) => {
-            e.preventDefault();
             this.hideAddWalletModal();
         });
 
@@ -881,18 +223,8 @@ class FirebaseWalletManager {
         document.getElementById('confirmTransactionBtn').addEventListener('click', () => {
             this.processTransaction();
         });
-        
-        document.getElementById('confirmTransactionBtn').addEventListener('touchend', (e) => {
-            e.preventDefault();
-            this.processTransaction();
-        });
 
         document.getElementById('cancelTransactionBtn').addEventListener('click', () => {
-            this.hideTransactionModal();
-        });
-        
-        document.getElementById('cancelTransactionBtn').addEventListener('touchend', (e) => {
-            e.preventDefault();
             this.hideTransactionModal();
         });
 
@@ -900,87 +232,18 @@ class FirebaseWalletManager {
         document.getElementById('saveEditBtn').addEventListener('click', () => {
             this.saveEditWallet();
         });
-        
-        document.getElementById('saveEditBtn').addEventListener('touchend', (e) => {
-            e.preventDefault();
-            this.saveEditWallet();
-        });
 
         document.getElementById('cancelEditBtn').addEventListener('click', () => {
-            this.hideEditWalletModal();
-        });
-        
-        document.getElementById('cancelEditBtn').addEventListener('touchend', (e) => {
-            e.preventDefault();
             this.hideEditWalletModal();
         });
 
         document.getElementById('deleteWalletBtn').addEventListener('click', () => {
             this.deleteWallet();
         });
-        
-        document.getElementById('deleteWalletBtn').addEventListener('touchend', (e) => {
-            e.preventDefault();
-            this.deleteWallet();
-        });
-
-        // 編輯交易相關事件
-        document.getElementById('saveEditTransactionBtn').addEventListener('click', () => {
-            this.saveEditTransaction();
-        });
-
-        document.getElementById('cancelEditTransactionBtn').addEventListener('click', () => {
-            this.hideEditTransactionModal();
-        });
-
-        // 事件委託處理交易編輯和刪除按鈕
-        document.addEventListener('click', (e) => {
-            if (e.target.classList.contains('edit-transaction')) {
-                const transactionId = e.target.getAttribute('data-transaction-id');
-                this.editTransaction(transactionId);
-            } else if (e.target.classList.contains('delete-transaction')) {
-                const transactionId = e.target.getAttribute('data-transaction-id');
-                this.deleteTransaction(transactionId);
-            }
-        });
-
-        // 交易紀錄相關事件
-        document.getElementById('closeHistoryBtn').addEventListener('click', () => {
-            this.hideTransactionHistory();
-        });
-        
-        document.getElementById('closeHistoryBtn').addEventListener('touchend', (e) => {
-            e.preventDefault();
-            this.hideTransactionHistory();
-        });
-
-        document.getElementById('exportTransactions').addEventListener('click', () => {
-            this.exportTransactionHistory();
-        });
-
-        // 交易紀錄篩選器
-        document.getElementById('filterAll').addEventListener('click', () => {
-            this.filterTransactions('all');
-        });
-
-        document.getElementById('filterDeposits').addEventListener('click', () => {
-            this.filterTransactions('add');
-        });
-
-        document.getElementById('filterWithdrawals').addEventListener('click', () => {
-            this.filterTransactions('subtract');
-        });
 
         // 關閉按鈕事件
         document.querySelectorAll('.close').forEach(closeBtn => {
             closeBtn.addEventListener('click', (e) => {
-                const modal = e.target.closest('.modal');
-                modal.style.display = 'none';
-            });
-            
-            // 添加觸控支援
-            closeBtn.addEventListener('touchend', (e) => {
-                e.preventDefault();
                 const modal = e.target.closest('.modal');
                 modal.style.display = 'none';
             });
@@ -993,14 +256,6 @@ class FirebaseWalletManager {
                     modal.style.display = 'none';
                 }
             });
-            
-            // 添加觸控支援
-            modal.addEventListener('touchend', (e) => {
-                if (e.target === modal) {
-                    e.preventDefault();
-                    modal.style.display = 'none';
-                }
-            });
         });
 
         // 按 Enter 鍵確認
@@ -1009,7 +264,6 @@ class FirebaseWalletManager {
                 const addModal = document.getElementById('addWalletModal');
                 const transactionModal = document.getElementById('transactionModal');
                 const editModal = document.getElementById('editWalletModal');
-                const editTransactionModal = document.getElementById('editTransactionModal');
                 
                 if (addModal.style.display === 'block') {
                     this.saveWallet();
@@ -1017,22 +271,13 @@ class FirebaseWalletManager {
                     this.processTransaction();
                 } else if (editModal.style.display === 'block') {
                     this.saveEditWallet();
-                } else if (editTransactionModal.style.display === 'block') {
-                    this.saveEditTransaction();
                 }
             }
             
             // ESC 關閉彈出視窗
             if (e.key === 'Escape') {
                 document.querySelectorAll('.modal').forEach(modal => {
-                    if (modal.style.display === 'block') {
-                        modal.style.display = 'none';
-                        
-                        // 清理狀態
-                        if (modal.id === 'editTransactionModal') {
-                            this.currentEditingTransaction = null;
-                        }
-                    }
+                    modal.style.display = 'none';
                 });
             }
         });
@@ -1090,71 +335,21 @@ class FirebaseWalletManager {
         card.innerHTML = `
             <div class="wallet-header">
                 <h3 class="wallet-name">${wallet.name}</h3>
-                <button class="edit-btn" data-wallet-id="${wallet.id}" data-action="edit">⚙️</button>
+                <button class="edit-btn" onclick="firebaseWalletManager.showEditWalletModal('${wallet.id}')">⚙️</button>
             </div>
             <div class="wallet-amount">${this.formatCurrency(wallet.amount)}</div>
             ${goalHtml}
-            <div class="wallet-actions-extended">
-                <button class="btn btn-success" data-wallet-id="${wallet.id}" data-action="add">
+            <div class="wallet-actions">
+                <button class="btn btn-success" onclick="firebaseWalletManager.showTransactionModal('${wallet.id}', 'add')">
                     ➕ 存入
                 </button>
-                <button class="btn btn-danger" data-wallet-id="${wallet.id}" data-action="subtract">
+                <button class="btn btn-danger" onclick="firebaseWalletManager.showTransactionModal('${wallet.id}', 'subtract')">
                     ➖ 提取
-                </button>
-                <button class="btn btn-info" data-wallet-id="${wallet.id}" data-action="history">
-                    📊 紀錄
                 </button>
             </div>
         `;
-        
-        // 添加事件監聽器
-        this.addWalletCardEvents(card, wallet.id);
 
         return card;
-    }
-    
-    // 添加錢包卡片事件
-    addWalletCardEvents(card, walletId) {
-        const editBtn = card.querySelector('.edit-btn');
-        const addBtn = card.querySelector('[data-action="add"]');
-        const subtractBtn = card.querySelector('[data-action="subtract"]');
-        const historyBtn = card.querySelector('[data-action="history"]');
-        
-        // 編輯按鈕
-        const handleEdit = (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            this.showEditWalletModal(walletId);
-        };
-        editBtn.addEventListener('click', handleEdit);
-        editBtn.addEventListener('touchend', handleEdit);
-        
-        // 存入按鈕
-        const handleAdd = (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            this.showTransactionModal(walletId, 'add');
-        };
-        addBtn.addEventListener('click', handleAdd);
-        addBtn.addEventListener('touchend', handleAdd);
-        
-        // 提取按鈕
-        const handleSubtract = (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            this.showTransactionModal(walletId, 'subtract');
-        };
-        subtractBtn.addEventListener('click', handleSubtract);
-        subtractBtn.addEventListener('touchend', handleSubtract);
-        
-        // 記錄按鈕
-        const handleHistory = (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            this.showTransactionHistory(walletId);
-        };
-        historyBtn.addEventListener('click', handleHistory);
-        historyBtn.addEventListener('touchend', handleHistory);
     }
 
     // 格式化貨幣顯示
@@ -1192,8 +387,8 @@ class FirebaseWalletManager {
             return;
         }
 
-        if (!this.user && !this.isOfflineMode) {
-            alert('請先登入或使用離線模式');
+        if (!this.user) {
+            alert('請先登入');
             return;
         }
 
@@ -1208,35 +403,16 @@ class FirebaseWalletManager {
         }
 
         try {
-            if (this.isOfflineMode) {
-                // 離線模式：儲存到本地
-                const newWallet = {
-                    id: this.generateId(),
-                    name: name,
-                    amount: amount,
-                    initialAmount: amount,
-                    goal: goal,
-                    createdAt: new Date().toISOString(),
-                    transactions: []
-                };
-                
-                this.wallets.unshift(newWallet);
-                this.saveWalletsToLocal();
-                this.renderWallets();
-            } else {
-                // 線上模式：儲存到Firebase
-                const { collection, addDoc } = window.firestoreModule;
-                const walletsRef = collection(window.db, 'users', this.user.uid, 'wallets');
-                
-                await addDoc(walletsRef, {
-                    name: name,
-                    amount: amount,
-                    initialAmount: amount,
-                    goal: goal,
-                    createdAt: new Date(),
-                    transactions: []
-                });
-            }
+            const { collection, addDoc } = window.firestoreModule;
+            const walletsRef = collection(window.db, 'users', this.user.uid, 'wallets');
+            
+            await addDoc(walletsRef, {
+                name: name,
+                amount: amount,
+                goal: goal,
+                createdAt: new Date(),
+                transactions: []
+            });
 
             this.hideAddWalletModal();
             this.showNotification(`錢包「${name}」創建成功！`, 'success');
@@ -1278,8 +454,8 @@ class FirebaseWalletManager {
             return;
         }
 
-        if (!this.user && !this.isOfflineMode) {
-            alert('請先登入或使用離線模式');
+        if (!this.user) {
+            alert('請先登入');
             return;
         }
 
@@ -1300,34 +476,22 @@ class FirebaseWalletManager {
         }
 
         try {
+            const { doc, updateDoc } = window.firestoreModule;
+            const walletRef = doc(window.db, 'users', this.user.uid, 'wallets', wallet.id);
+            
             const transaction = {
-                id: this.generateId(),
+                id: Date.now().toString(),
                 type: this.transactionType,
                 amount: amount,
                 note: note,
-                date: new Date().toISOString(),
+                date: new Date(),
                 balance: newAmount
             };
 
-            if (this.isOfflineMode) {
-                // 離線模式：更新本地資料
-                wallet.amount = newAmount;
-                if (!wallet.transactions) {
-                    wallet.transactions = [];
-                }
-                wallet.transactions.push(transaction);
-                this.saveWalletsToLocal();
-                this.renderWallets();
-            } else {
-                // 線上模式：更新Firebase
-                const { doc, updateDoc } = window.firestoreModule;
-                const walletRef = doc(window.db, 'users', this.user.uid, 'wallets', wallet.id);
-                
-                await updateDoc(walletRef, {
-                    amount: newAmount,
-                    transactions: [...(wallet.transactions || []), transaction]
-                });
-            }
+            await updateDoc(walletRef, {
+                amount: newAmount,
+                transactions: [...(wallet.transactions || []), transaction]
+            });
 
             const successMessage = this.transactionType === 'add' 
                 ? `成功存入 ${this.formatCurrency(amount)}`
@@ -1425,354 +589,6 @@ class FirebaseWalletManager {
         }
     }
 
-    // 顯示交易紀錄
-    showTransactionHistory(walletId) {
-        this.currentViewingWallet = walletId;
-        const wallet = this.wallets.find(w => w.id === walletId);
-        
-        if (!wallet) return;
-        
-        document.getElementById('historyTitle').textContent = `${wallet.name} - 交易紀錄`;
-        
-        // 計算統計資訊
-        const transactions = wallet.transactions || [];
-        let totalDeposits = 0;
-        let totalWithdrawals = 0;
-        
-        transactions.forEach(transaction => {
-            if (transaction.type === 'add') {
-                totalDeposits += transaction.amount;
-            } else {
-                totalWithdrawals += transaction.amount;
-            }
-        });
-        
-        document.getElementById('totalDeposits').textContent = this.formatCurrency(totalDeposits);
-        document.getElementById('totalWithdrawals').textContent = this.formatCurrency(totalWithdrawals);
-        document.getElementById('totalTransactions').textContent = `${transactions.length} 筆`;
-        
-        // 顯示交易列表
-        this.renderTransactionList(transactions);
-        
-        // 重設篩選器
-        this.setActiveFilter('filterAll');
-        
-        document.getElementById('transactionHistoryModal').style.display = 'block';
-    }
-
-    // 隱藏交易紀錄
-    hideTransactionHistory() {
-        document.getElementById('transactionHistoryModal').style.display = 'none';
-        this.currentViewingWallet = null;
-    }
-
-    // 渲染交易列表
-    renderTransactionList(transactions) {
-        const container = document.getElementById('transactionList');
-        
-        if (!transactions || transactions.length === 0) {
-            container.innerHTML = `
-                <div class="empty-transactions">
-                    <h4>還沒有交易紀錄</h4>
-                    <p>開始使用存入或提取功能來記錄您的交易吧！</p>
-                </div>
-            `;
-            return;
-        }
-        
-        // 按日期排序（最新的在前面）
-        const sortedTransactions = transactions.sort((a, b) => {
-            const dateA = a.date?.toDate ? a.date.toDate() : new Date(a.date);
-            const dateB = b.date?.toDate ? b.date.toDate() : new Date(b.date);
-            return dateB - dateA;
-        });
-        
-        container.innerHTML = '';
-        
-        sortedTransactions.forEach(transaction => {
-            const item = this.createTransactionItem(transaction);
-            container.appendChild(item);
-        });
-    }
-
-    // 創建交易項目
-    createTransactionItem(transaction) {
-        const item = document.createElement('div');
-        item.className = `transaction-item ${transaction.type === 'add' ? 'deposit' : 'withdrawal'}`;
-        item.dataset.type = transaction.type;
-        item.dataset.transactionId = transaction.id;
-        
-        // 處理 Firebase Timestamp 或普通 Date
-        const date = transaction.date?.toDate ? transaction.date.toDate() : new Date(transaction.date);
-        const formattedDate = date.toLocaleString('zh-TW');
-        
-        const typeText = transaction.type === 'add' ? '存入' : '提取';
-        const amountClass = transaction.type === 'add' ? 'positive' : 'negative';
-        const amountPrefix = transaction.type === 'add' ? '+' : '-';
-        
-        item.innerHTML = `
-            <div class="transaction-info">
-                <div class="transaction-type ${transaction.type === 'add' ? 'deposit' : 'withdrawal'}">
-                    ${typeText}
-                </div>
-                ${transaction.note ? `<div class="transaction-note">${transaction.note}</div>` : ''}
-                <div class="transaction-date">${formattedDate}</div>
-            </div>
-            <div class="transaction-amount-info">
-                <div class="transaction-amount ${amountClass}">
-                    ${amountPrefix}${this.formatCurrency(transaction.amount)}
-                </div>
-                <div class="transaction-balance">
-                    餘額: ${this.formatCurrency(transaction.balance)}
-                </div>
-            </div>
-            <div class="transaction-actions">
-                <button class="btn-icon edit-transaction" data-transaction-id="${transaction.id}" title="編輯">
-                    ✏️
-                </button>
-                <button class="btn-icon delete-transaction" data-transaction-id="${transaction.id}" title="刪除">
-                    🗑️
-                </button>
-            </div>
-        `;
-        
-        return item;
-    }
-
-    // 篩選交易紀錄
-    filterTransactions(type) {
-        const wallet = this.wallets.find(w => w.id === this.currentViewingWallet);
-        if (!wallet) return;
-        
-        const transactions = wallet.transactions || [];
-        let filteredTransactions;
-        
-        if (type === 'all') {
-            filteredTransactions = transactions;
-        } else {
-            filteredTransactions = transactions.filter(t => t.type === type);
-        }
-        
-        this.renderTransactionList(filteredTransactions);
-        this.setActiveFilter(`filter${type === 'all' ? 'All' : type === 'add' ? 'Deposits' : 'Withdrawals'}`);
-    }
-
-    // 設定啟用的篩選器
-    setActiveFilter(activeId) {
-        document.querySelectorAll('.filter-btn').forEach(btn => {
-            btn.classList.remove('active');
-        });
-        document.getElementById(activeId).classList.add('active');
-    }
-
-    // 匯出交易紀錄
-    exportTransactionHistory() {
-        const wallet = this.wallets.find(w => w.id === this.currentViewingWallet);
-        if (!wallet || !wallet.transactions) return;
-        
-        const transactions = wallet.transactions.sort((a, b) => {
-            const dateA = a.date?.toDate ? a.date.toDate() : new Date(a.date);
-            const dateB = b.date?.toDate ? b.date.toDate() : new Date(b.date);
-            return dateB - dateA;
-        });
-        
-        // 創建 CSV 格式的數據
-        const headers = ['日期', '類型', '金額', '備註', '餘額'];
-        const csvContent = [
-            headers.join(','),
-            ...transactions.map(t => {
-                const date = t.date?.toDate ? t.date.toDate() : new Date(t.date);
-                return [
-                    date.toLocaleString('zh-TW'),
-                    t.type === 'add' ? '存入' : '提取',
-                    t.amount,
-                    t.note || '',
-                    t.balance
-                ].map(field => `"${field}"`).join(',');
-            })
-        ].join('\n');
-        
-        // 下載檔案
-        const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
-        const url = URL.createObjectURL(blob);
-        
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `${wallet.name}-交易紀錄-${new Date().toISOString().split('T')[0]}.csv`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-        
-        this.showNotification('交易紀錄已匯出！', 'success');
-    }
-
-    // 編輯交易
-    editTransaction(transactionId) {
-        const wallet = this.wallets.find(w => w.id === this.currentViewingWallet);
-        if (!wallet) return;
-        
-        const transaction = wallet.transactions.find(t => t.id === transactionId);
-        if (!transaction) return;
-        
-        // 將交易資料填入編輯表單
-        document.getElementById('editTransactionType').value = transaction.type;
-        document.getElementById('editTransactionAmount').value = transaction.amount;
-        document.getElementById('editTransactionNote').value = transaction.note || '';
-        
-        // 格式化日期時間用於 datetime-local 輸入
-        const date = new Date(transaction.date);
-        const formattedDate = new Date(date.getTime() - (date.getTimezoneOffset() * 60000))
-            .toISOString().slice(0, -1);
-        document.getElementById('editTransactionDate').value = formattedDate;
-        
-        // 記錄正在編輯的交易ID
-        this.currentEditingTransaction = transactionId;
-        
-        // 顯示編輯彈出視窗
-        document.getElementById('editTransactionModal').style.display = 'block';
-    }
-
-    // 儲存編輯後的交易
-    async saveEditTransaction() {
-        const type = document.getElementById('editTransactionType').value;
-        const amount = parseFloat(document.getElementById('editTransactionAmount').value);
-        const note = document.getElementById('editTransactionNote').value.trim();
-        const dateStr = document.getElementById('editTransactionDate').value;
-        
-        if (!amount || amount <= 0) {
-            this.showNotification('請輸入有效的金額', 'error');
-            return;
-        }
-        
-        if (!dateStr) {
-            this.showNotification('請選擇日期', 'error');
-            return;
-        }
-        
-        const wallet = this.wallets.find(w => w.id === this.currentViewingWallet);
-        if (!wallet) return;
-        
-        const transactionIndex = wallet.transactions.findIndex(t => t.id === this.currentEditingTransaction);
-        if (transactionIndex === -1) return;
-        
-        const oldTransaction = wallet.transactions[transactionIndex];
-        const newDate = new Date(dateStr);
-        
-        // 更新交易資料
-        wallet.transactions[transactionIndex] = {
-            ...oldTransaction,
-            type: type,
-            amount: amount,
-            note: note,
-            date: newDate.toISOString()
-        };
-        
-        // 重新計算所有交易的餘額
-        this.recalculateBalances(wallet);
-        
-        try {
-            if (this.isOfflineMode) {
-                // 離線模式：儲存到本地
-                this.saveWalletsToLocal();
-                this.renderWallets();
-            } else {
-                // 線上模式：更新Firebase
-                const { doc, updateDoc } = window.firestoreModule;
-                const walletRef = doc(window.db, 'users', this.user.uid, 'wallets', wallet.id);
-                
-                await updateDoc(walletRef, {
-                    amount: wallet.amount,
-                    transactions: wallet.transactions
-                });
-            }
-            
-            // 更新交易歷史顯示
-            this.showTransactionHistory(this.currentViewingWallet);
-            
-            // 隱藏編輯彈出視窗
-            this.hideEditTransactionModal();
-            
-            this.showNotification('交易已更新！', 'success');
-        } catch (error) {
-            console.error('更新交易失敗:', error);
-            this.showNotification('更新失敗，請重試', 'error');
-        }
-    }
-
-    // 隱藏編輯交易彈出視窗
-    hideEditTransactionModal() {
-        document.getElementById('editTransactionModal').style.display = 'none';
-        this.currentEditingTransaction = null;
-    }
-
-    // 刪除交易
-    async deleteTransaction(transactionId) {
-        if (!confirm('確定要刪除這筆交易嗎？此操作無法撤銷。')) {
-            return;
-        }
-        
-        const wallet = this.wallets.find(w => w.id === this.currentViewingWallet);
-        if (!wallet) return;
-        
-        // 移除交易
-        wallet.transactions = wallet.transactions.filter(t => t.id !== transactionId);
-        
-        // 重新計算所有交易的餘額
-        this.recalculateBalances(wallet);
-        
-        try {
-            if (this.isOfflineMode) {
-                // 離線模式：儲存到本地
-                this.saveWalletsToLocal();
-                this.renderWallets();
-            } else {
-                // 線上模式：更新Firebase
-                const { doc, updateDoc } = window.firestoreModule;
-                const walletRef = doc(window.db, 'users', this.user.uid, 'wallets', wallet.id);
-                
-                await updateDoc(walletRef, {
-                    amount: wallet.amount,
-                    transactions: wallet.transactions
-                });
-            }
-            
-            // 更新交易歷史顯示
-            this.showTransactionHistory(this.currentViewingWallet);
-            
-            this.showNotification('交易已刪除！', 'success');
-        } catch (error) {
-            console.error('刪除交易失敗:', error);
-            this.showNotification('刪除失敗，請重試', 'error');
-        }
-    }
-
-    // 重新計算錢包餘額
-    recalculateBalances(wallet) {
-        if (!wallet.transactions || wallet.transactions.length === 0) {
-            wallet.amount = wallet.initialAmount || 0;
-            return;
-        }
-        
-        // 按日期排序交易
-        wallet.transactions.sort((a, b) => new Date(a.date) - new Date(b.date));
-        
-        let currentBalance = wallet.initialAmount || 0;
-        
-        // 重新計算每筆交易的餘額
-        wallet.transactions.forEach(transaction => {
-            if (transaction.type === 'add') {
-                currentBalance += transaction.amount;
-            } else {
-                currentBalance -= transaction.amount;
-            }
-            transaction.balance = currentBalance;
-        });
-        
-        // 更新錢包當前金額
-        wallet.amount = currentBalance;
-    }
-
     // 顯示通知訊息
     showNotification(message, type = 'info') {
         // 創建通知元素
@@ -1829,67 +645,5 @@ class FirebaseWalletManager {
 let firebaseWalletManager;
 
 document.addEventListener('DOMContentLoaded', () => {
-    console.log('DOM 內容已載入，開始設置事件監聽器');
-    
     firebaseWalletManager = new FirebaseWalletManager();
-    window.firebaseWalletManager = firebaseWalletManager; // 設定全域變數以供 onclick 使用
-    
-    // 等待一小段時間確保所有元素都已渲染
-    setTimeout(() => {
-        // 設置按鈕事件監聽器
-        const loginBtn = document.getElementById('loginBtn');
-        if (loginBtn) {
-            loginBtn.addEventListener('click', () => {
-                firebaseWalletManager.loginWithGoogle();
-            });
-            console.log('登入按鈕監聽器已設置');
-        } else {
-            console.error('找不到登入按鈕');
-        }
-        
-        const logoutBtn = document.getElementById('logoutBtn');
-        if (logoutBtn) {
-            logoutBtn.addEventListener('click', () => {
-                firebaseWalletManager.logout();
-            });
-            console.log('登出按鈕監聽器已設置');
-        }
-        
-        const offlineBtn = document.getElementById('offlineBtn');
-        if (offlineBtn) {
-            offlineBtn.addEventListener('click', () => {
-                firebaseWalletManager.enableOfflineMode();
-            });
-            console.log('離線按鈕監聽器已設置');
-        }
-        
-        // 診斷按鈕監聽器
-        const diagnosBtn = document.getElementById('diagnosBtn');
-        if (diagnosBtn) {
-            diagnosBtn.addEventListener('click', () => {
-                firebaseWalletManager.showDiagnostics();
-            });
-            console.log('診斷按鈕監聽器已設置');
-        }
-        
-        // 診斷按鈕監聽器（離線區域中的）
-        const diagnosBtn2 = document.getElementById('diagnosBtn2');
-        if (diagnosBtn2) {
-            diagnosBtn2.addEventListener('click', () => {
-                firebaseWalletManager.showDiagnostics();
-            });
-            console.log('離線區域診斷按鈕監聽器已設置');
-        }
-        
-        // 重新整理按鈕監聽器
-        const refreshBtn = document.getElementById('refreshBtn');
-        if (refreshBtn) {
-            refreshBtn.addEventListener('click', () => {
-                firebaseWalletManager.refreshOfflineMode();
-            });
-            console.log('重新整理按鈕監聽器已設置');
-        }
-        
-        console.log('所有事件監聽器設置完成');
-    }, 500); // 延遲500毫秒確保DOM完全渲染
 });
