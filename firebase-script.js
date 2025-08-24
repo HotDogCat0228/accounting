@@ -24,19 +24,57 @@ class FirebaseWalletManager {
     // 等待 Firebase 載入完成
     async waitForFirebase() {
         return new Promise((resolve, reject) => {
+            let attempts = 0;
+            const maxAttempts = 100; // 10秒
+            
             const checkFirebase = () => {
+                console.log(`Firebase檢查嘗試 ${attempts + 1}/${maxAttempts}`);
+                
                 if (window.db && window.auth) {
-                    resolve();
-                } else if (this.waitAttempts > 50) { // 5秒後超時
+                    console.log('Firebase初始化成功');
+                    
+                    // 測試Firebase連接
+                    this.testFirebaseConnection()
+                        .then(() => {
+                            console.log('Firebase連接測試成功');
+                            resolve();
+                        })
+                        .catch((error) => {
+                            console.error('Firebase連接測試失敗:', error);
+                            // 即使連接測試失敗，也繼續初始化，讓用戶可以嘗試登入
+                            resolve();
+                        });
+                } else if (attempts >= maxAttempts) {
+                    console.error('Firebase載入超時');
                     reject(new Error('Firebase 載入超時'));
                 } else {
-                    this.waitAttempts++;
+                    attempts++;
                     setTimeout(checkFirebase, 100);
                 }
             };
-            this.waitAttempts = 0;
+            
             checkFirebase();
         });
+    }
+    
+    // 測試Firebase連接
+    async testFirebaseConnection() {
+        try {
+            // 嘗試獲取當前認證狀態
+            return new Promise((resolve, reject) => {
+                const timeout = setTimeout(() => {
+                    reject(new Error('Firebase連接超時'));
+                }, 5000);
+                
+                const unsubscribe = window.auth.onAuthStateChanged((user) => {
+                    clearTimeout(timeout);
+                    unsubscribe();
+                    resolve(user);
+                });
+            });
+        } catch (error) {
+            throw new Error('Firebase服務無法訪問: ' + error.message);
+        }
     }
 
     // 初始化應用程式
@@ -85,11 +123,13 @@ class FirebaseWalletManager {
 
     // 設定驗證狀態監聽器
     setupAuthListener() {
-        const { onAuthStateChanged } = window.authModule || {};
+        console.log('設定Firebase Auth監聽器...');
         
         // 使用動態導入來載入 Firebase Auth 模組
         import('https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js')
             .then(({ onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, signOut }) => {
+                console.log('Firebase Auth模組載入成功');
+                
                 window.authModule = { 
                     onAuthStateChanged, 
                     GoogleAuthProvider, 
@@ -99,29 +139,40 @@ class FirebaseWalletManager {
                     signOut 
                 };
                 
-                onAuthStateChanged(window.auth, (user) => {
-                    this.handleAuthStateChange(user);
-                });
-                
-                // 檢查重定向結果 (用於手機端)
+                // 先檢查重定向結果 (用於手機端)
                 getRedirectResult(window.auth).then((result) => {
                     if (result && result.user) {
                         console.log('重定向登入成功:', result.user.displayName);
                         this.showNotification('登入成功！', 'success');
                     }
                 }).catch((error) => {
-                    if (error.code !== 'auth/no-redirect-operation') {
+                    if (error.code && error.code !== 'auth/no-redirect-operation') {
                         console.error('重定向登入失敗:', error);
+                        // 不自動切換到離線模式，讓用戶選擇
                     }
                 });
+                
+                // 設定認證狀態監聽器
+                onAuthStateChanged(window.auth, (user) => {
+                    console.log('認證狀態變更:', user ? '已登入' : '未登入');
+                    this.handleAuthStateChange(user);
+                });
+                
+                console.log('Firebase Auth設定完成');
             })
             .catch((error) => {
                 console.error('Firebase Auth 模組載入失敗:', error);
-                // 自動切換到離線模式
-                this.showNotification('網路連線問題，自動切換到離線模式', 'info');
+                this.showNotification('Firebase載入失敗，建議使用離線模式', 'warning');
+                
+                // 延遲5秒後提示，給用戶時間看到錯誤信息
                 setTimeout(() => {
-                    this.enableOfflineMode();
-                }, 2000);
+                    if (!this.user && !this.isOfflineMode) {
+                        const useOffline = confirm('Firebase服務無法連接，是否使用離線模式？\n\n離線模式提供完整的記帳功能，資料儲存在您的設備上。');
+                        if (useOffline) {
+                            this.enableOfflineMode();
+                        }
+                    }
+                }, 5000);
             });
     }
 
@@ -219,53 +270,91 @@ class FirebaseWalletManager {
     // Google 登入
     async loginWithGoogle() {
         try {
-            // 檢查是否為移動設備
-            const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+            console.log('開始Google登入流程...');
+            
+            // 檢查Firebase是否正確初始化
+            if (!window.auth) {
+                throw new Error('Firebase Auth 尚未初始化');
+            }
             
             if (!window.authModule) {
                 throw new Error('Firebase Auth 模組尚未載入');
             }
             
+            // 檢查是否為移動設備
+            const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+            console.log('設備類型:', isMobile ? '手機' : '桌面');
+            
             const { GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult } = window.authModule;
             const provider = new GoogleAuthProvider();
             
-            // 手機端使用 redirect，桌面端使用 popup
+            // 設定OAuth範圍
+            provider.addScope('profile');
+            provider.addScope('email');
+            
+            this.showNotification('正在登入中...', 'info');
+            
             if (isMobile) {
-                // 先檢查是否有重定向結果
-                try {
-                    const result = await getRedirectResult(window.auth);
-                    if (result && result.user) {
-                        this.showNotification('登入成功！', 'success');
-                        return;
-                    }
-                } catch (redirectError) {
-                    console.log('無重定向結果:', redirectError);
-                }
-                
-                // 使用重定向登入
+                console.log('使用重定向登入...');
+                // 手機端使用重定向
                 await signInWithRedirect(window.auth, provider);
+                // 重定向後會自動處理，不需要等待結果
             } else {
+                console.log('使用彈出視窗登入...');
                 // 桌面端使用彈出視窗
-                await signInWithPopup(window.auth, provider);
+                const result = await signInWithPopup(window.auth, provider);
+                console.log('登入成功:', result.user.displayName);
                 this.showNotification('登入成功！', 'success');
             }
         } catch (error) {
-            console.error('登入失敗:', error);
+            console.error('登入錯誤詳細信息:', error);
             
-            // 如果是手機端且popup失敗，提供離線模式選項
-            if (error.code === 'auth/popup-blocked' || 
-                error.code === 'auth/popup-closed-by-user' || 
-                error.code === 'auth/unauthorized-domain') {
-                this.showNotification('登入受限，建議使用離線模式', 'warning');
-                
-                // 自動顯示離線模式按鈕
+            let errorMessage = '登入失敗：';
+            let shouldOfferOffline = false;
+            
+            // 根據錯誤類型提供具體的錯誤信息
+            switch (error.code) {
+                case 'auth/popup-blocked':
+                    errorMessage += '彈出視窗被封鎖，請允許彈出視窗或使用離線模式';
+                    shouldOfferOffline = true;
+                    break;
+                case 'auth/popup-closed-by-user':
+                    errorMessage += '登入視窗被關閉';
+                    shouldOfferOffline = true;
+                    break;
+                case 'auth/unauthorized-domain':
+                    errorMessage += '網域未授權，請使用離線模式';
+                    shouldOfferOffline = true;
+                    break;
+                case 'auth/network-request-failed':
+                    errorMessage += '網路連線問題';
+                    shouldOfferOffline = true;
+                    break;
+                case 'auth/too-many-requests':
+                    errorMessage += '嘗試次數過多，請稍後再試';
+                    break;
+                default:
+                    if (error.message.includes('Firebase Auth')) {
+                        errorMessage += 'Firebase服務問題';
+                        shouldOfferOffline = true;
+                    } else {
+                        errorMessage += error.message || '未知錯誤';
+                        shouldOfferOffline = true;
+                    }
+            }
+            
+            this.showNotification(errorMessage, 'error');
+            
+            // 顯示診斷按鈕供用戶檢查連線問題
+            document.getElementById('diagnosBtn').style.display = 'inline-block';
+            
+            // 如果適合，自動提供離線模式選項
+            if (shouldOfferOffline) {
                 setTimeout(() => {
-                    if (confirm('登入遇到問題，是否改用離線模式？')) {
+                    if (confirm(errorMessage + '\n\n是否改用離線模式？離線模式提供完整功能。')) {
                         this.enableOfflineMode();
                     }
                 }, 2000);
-            } else {
-                this.showNotification('登入失敗，請重試或使用離線模式', 'error');
             }
         }
     }
@@ -299,7 +388,106 @@ class FirebaseWalletManager {
         // 顯示離線模式通知
         this.showNotification('已切換到離線模式', 'info');
         
+        // 顯示診斷按鈕
+        document.getElementById('diagnosBtn').style.display = 'inline-block';
+        
         console.log('已啟用離線模式');
+    }
+    
+    // 顯示診斷信息
+    showDiagnostics() {
+        const diagnostics = [];
+        
+        // 檢查Firebase狀態
+        diagnostics.push('=== Firebase 診斷報告 ===');
+        diagnostics.push(`Firebase App: ${window.firebaseApp ? '✅ 已載入' : '❌ 未載入'}`);
+        diagnostics.push(`Firebase Auth: ${window.auth ? '✅ 已載入' : '❌ 未載入'}`);
+        diagnostics.push(`Firebase DB: ${window.db ? '✅ 已載入' : '❌ 未載入'}`);
+        diagnostics.push(`Auth Module: ${window.authModule ? '✅ 已載入' : '❌ 未載入'}`);
+        
+        // 檢查網路狀態
+        diagnostics.push('');
+        diagnostics.push('=== 網路狀態 ===');
+        diagnostics.push(`線上狀態: ${navigator.onLine ? '✅ 在線' : '❌ 離線'}`);
+        diagnostics.push(`用戶代理: ${navigator.userAgent.slice(0, 50)}...`);
+        
+        // 檢查設備類型
+        const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+        diagnostics.push(`設備類型: ${isMobile ? '📱 手機' : '💻 桌面'}`);
+        
+        // 檢查當前域名
+        diagnostics.push('');
+        diagnostics.push('=== 域名信息 ===');
+        diagnostics.push(`當前域名: ${window.location.hostname}`);
+        diagnostics.push(`完整URL: ${window.location.href}`);
+        diagnostics.push(`協議: ${window.location.protocol}`);
+        
+        // 檢查localStorage
+        diagnostics.push('');
+        diagnostics.push('=== 存儲狀態 ===');
+        try {
+            localStorage.setItem('test', 'test');
+            localStorage.removeItem('test');
+            diagnostics.push('LocalStorage: ✅ 可用');
+        } catch (e) {
+            diagnostics.push('LocalStorage: ❌ 不可用');
+        }
+        
+        // 顯示離線錢包數量
+        const offlineWallets = this.loadWalletsFromLocal();
+        diagnostics.push(`離線錢包數量: ${offlineWallets.length}`);
+        
+        // 顯示結果
+        const message = diagnostics.join('\n');
+        console.log(message);
+        
+        // 創建診斷結果彈出視窗
+        const diagModal = document.createElement('div');
+        diagModal.style.cssText = `
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.8);
+            z-index: 10000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        `;
+        
+        diagModal.innerHTML = `
+            <div style="
+                background: white;
+                padding: 20px;
+                border-radius: 10px;
+                max-width: 500px;
+                max-height: 80vh;
+                overflow-y: auto;
+                font-family: monospace;
+                font-size: 12px;
+                line-height: 1.4;
+            ">
+                <h3 style="margin-top: 0;">Firebase 連接診斷</h3>
+                <pre style="white-space: pre-wrap; margin: 10px 0;">${message}</pre>
+                <div style="text-align: center; margin-top: 20px;">
+                    <button onclick="this.parentElement.parentElement.parentElement.remove()" 
+                            style="padding: 10px 20px; background: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer;">
+                        關閉
+                    </button>
+                </div>
+            </div>
+        `;
+        
+        document.body.appendChild(diagModal);
+        
+        // 點擊背景關閉
+        diagModal.addEventListener('click', (e) => {
+            if (e.target === diagModal) {
+                diagModal.remove();
+            }
+        });
     }
 
     // 從本地儲存載入錢包
@@ -352,6 +540,11 @@ class FirebaseWalletManager {
         document.getElementById('offlineBtn').addEventListener('touchend', (e) => {
             e.preventDefault();
             this.enableOfflineMode();
+        });
+        
+        // 診斷按鈕
+        document.getElementById('diagnosBtn').addEventListener('click', () => {
+            this.showDiagnostics();
         });
 
         document.getElementById('logoutBtn').addEventListener('click', () => {
@@ -1346,4 +1539,22 @@ let firebaseWalletManager;
 document.addEventListener('DOMContentLoaded', () => {
     firebaseWalletManager = new FirebaseWalletManager();
     window.firebaseWalletManager = firebaseWalletManager; // 設定全域變數以供 onclick 使用
+    
+    // 設置按鈕事件監聽器
+    document.getElementById('loginBtn').addEventListener('click', () => {
+        firebaseWalletManager.loginWithGoogle();
+    });
+    
+    document.getElementById('logoutBtn').addEventListener('click', () => {
+        firebaseWalletManager.logout();
+    });
+    
+    document.getElementById('offlineBtn').addEventListener('click', () => {
+        firebaseWalletManager.enableOfflineMode();
+    });
+    
+    // 診斷按鈕監聽器
+    document.getElementById('diagnosBtn').addEventListener('click', () => {
+        firebaseWalletManager.showDiagnostics();
+    });
 });
