@@ -47,6 +47,72 @@ body {
     margin-bottom: 0 !important;
 }
 
+/* 手機端專用樣式 */
+.mobile-device .auth-container {
+    margin-bottom: 15px;
+    padding: 20px 15px;
+}
+
+.mobile-device .login-section {
+    text-align: center;
+}
+
+.mobile-device .login-section p {
+    margin-bottom: 20px;
+    font-size: 1.2rem;
+}
+
+/* 手機端觸控優化 */
+@media (max-width: 768px) {
+    .login-section button {
+        display: block;
+        width: 100%;
+        margin: 10px 0;
+        padding: 15px;
+        font-size: 1.1rem;
+        min-height: 50px; /* 確保按鈕夠大方便觸碰 */
+        touch-action: manipulation; /* 防止雙擊縮放 */
+    }
+    
+    #offlineBtn {
+        background: linear-gradient(45deg, #28a745, #20c997) !important;
+        box-shadow: 0 4px 15px rgba(40, 167, 69, 0.3);
+        border: 2px solid #28a745 !important;
+    }
+    
+    #offlineBtn:active {
+        transform: translateY(2px);
+        box-shadow: 0 2px 8px rgba(40, 167, 69, 0.5);
+    }
+    
+    .offline-hint {
+        font-size: 1rem !important;
+        opacity: 1;
+        color: #ffffff !important;
+        background: rgba(255, 255, 255, 0.1);
+        padding: 10px;
+        border-radius: 8px;
+        margin-top: 15px !important;
+        text-align: center;
+    }
+    
+    /* 改善手機端的交易按鈕 */
+    .btn-icon {
+        min-width: 44px;
+        min-height: 44px;
+        font-size: 1.4rem;
+        padding: 12px;
+    }
+    
+    /* 改善手機端的通知 */
+    .notification {
+        left: 10px !important;
+        right: 10px !important;
+        width: auto !important;
+        max-width: none !important;
+    }
+}
+
 .user-section {
     display: flex;
     justify-content: space-between;
