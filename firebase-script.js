@@ -1092,6 +1092,13 @@ class FirebaseWalletManager {
             filteredTransactions = this.currentTransactions.filter(t => t.type === 'subtract');
         }
 
+        // 確保篩選後的交易按時間排序（最新的在前）
+        filteredTransactions.sort((a, b) => {
+            const dateA = a.createdAt?.toDate?.() || new Date(a.createdAt) || new Date(a.date);
+            const dateB = b.createdAt?.toDate?.() || new Date(b.createdAt) || new Date(b.date);
+            return dateB - dateA; // 最新的在前
+        });
+
         container.innerHTML = '';
         
         filteredTransactions.forEach(transaction => {
@@ -1109,8 +1116,8 @@ class FirebaseWalletManager {
         const typeClass = transaction.type === 'add' ? 'deposit' : 'withdrawal';
         const amountPrefix = transaction.type === 'add' ? '+' : '-';
         
-        // 格式化日期
-        const date = transaction.date?.toDate?.() || new Date(transaction.date);
+        // 格式化日期 - 優先使用 createdAt
+        const date = transaction.createdAt?.toDate?.() || new Date(transaction.createdAt) || transaction.date?.toDate?.() || new Date(transaction.date);
         const dateStr = date.toLocaleString('zh-TW', {
             year: 'numeric',
             month: '2-digit',
