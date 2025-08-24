@@ -1,4 +1,4 @@
-const CACHE_NAME = 'wallet-app-v1.0.2';
+const CACHE_NAME = 'wallet-app-v1.0.3';
 const urlsToCache = [
   './',
   './index.html',
@@ -9,30 +9,63 @@ const urlsToCache = [
   './icons/icon-144x144.svg'
 ];
 
+// 強制清理所有舊緩存
+const FORCE_UPDATE = true;
+
 // 安裝 Service Worker
 self.addEventListener('install', function(event) {
   console.log('Service Worker installing...');
   event.waitUntil(
-    caches.open(CACHE_NAME)
+    Promise.resolve()
+      .then(() => {
+        // 如果強制更新，先清理所有緩存
+        if (FORCE_UPDATE) {
+          console.log('Force update: clearing all caches');
+          return caches.keys().then(cacheNames => {
+            return Promise.all(
+              cacheNames.map(cacheName => {
+                console.log('Deleting cache:', cacheName);
+                return caches.delete(cacheName);
+              })
+            );
+          });
+        }
+      })
+      .then(() => {
+        // 重新建立緩存
+        return caches.open(CACHE_NAME);
+      })
       .then(function(cache) {
-        console.log('Opened cache');
-        // 分別處理每個 URL 以避免單一失敗導致全部失敗
-        return Promise.allSettled(
-          urlsToCache.map(url => 
-            cache.add(url).catch(err => {
-              console.warn('Failed to cache:', url, err);
-              return null;
+        console.log('Opened fresh cache');
+        // 一個一個添加文件，跳過失敗的
+        const cachePromises = urlsToCache.map(url => {
+          return fetch(url)
+            .then(response => {
+              if (response.ok) {
+                console.log('Caching:', url);
+                return cache.put(url, response);
+              } else {
+                console.warn('Skipping failed fetch:', url, response.status);
+                return null;
+              }
             })
-          )
-        );
+            .catch(err => {
+              console.warn('Failed to cache:', url, err.message);
+              return null;
+            });
+        });
+        
+        return Promise.allSettled(cachePromises);
       })
       .then(function(results) {
-        console.log('Cache setup completed with', results.length, 'items attempted');
+        const successful = results.filter(r => r.status === 'fulfilled' && r.value !== null).length;
+        console.log('Cache setup completed:', successful, 'of', results.length, 'items cached');
         // 強制激活新的 service worker
         return self.skipWaiting();
       })
       .catch(function(error) {
         console.error('Service Worker install failed:', error);
+        throw error;
       })
   );
 });

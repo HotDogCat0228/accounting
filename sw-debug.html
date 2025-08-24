@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Service Worker Debug</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        button { padding: 10px 20px; margin: 10px; }
+        .log { background: #f5f5f5; padding: 10px; margin: 10px 0; border-radius: 4px; }
+        .error { background: #ffe6e6; }
+        .success { background: #e6ffe6; }
+    </style>
+</head>
+<body>
+    <h1>Service Worker 除錯工具</h1>
+    
+    <div>
+        <button onclick="unregisterSW()">移除舊的 Service Worker</button>
+        <button onclick="registerSW()">註冊新的 Service Worker</button>
+        <button onclick="clearAllCaches()">清除所有緩存</button>
+        <button onclick="checkCaches()">檢查緩存狀態</button>
+        <button onclick="testManifest()">測試 Manifest</button>
+    </div>
+
+    <div id="logs"></div>
+
+    <script>
+        function log(message, type = 'log') {
+            const logs = document.getElementById('logs');
+            const div = document.createElement('div');
+            div.className = `log ${type}`;
+            div.innerHTML = `[${new Date().toLocaleTimeString()}] ${message}`;
+            logs.appendChild(div);
+            console.log(message);
+        }
+
+        async function unregisterSW() {
+            try {
+                const registrations = await navigator.serviceWorker.getRegistrations();
+                log(`找到 ${registrations.length} 個 Service Worker`);
+                
+                for (const registration of registrations) {
+                    await registration.unregister();
+                    log(`已移除 Service Worker: ${registration.scope}`, 'success');
+                }
+                
+                if (registrations.length === 0) {
+                    log('沒有找到 Service Worker', 'log');
+                }
+            } catch (error) {
+                log(`移除 Service Worker 失敗: ${error.message}`, 'error');
+            }
+        }
+
+        async function registerSW() {
+            try {
+                const registration = await navigator.serviceWorker.register('./service-worker.js');
+                log(`Service Worker 註冊成功: ${registration.scope}`, 'success');
+                
+                // 等待新的 service worker 激活
+                if (registration.installing) {
+                    log('Service Worker 正在安裝...', 'log');
+                    registration.installing.addEventListener('statechange', function() {
+                        if (this.state === 'activated') {
+                            log('Service Worker 已激活', 'success');
+                            window.location.reload();
+                        }
+                    });
+                }
+            } catch (error) {
+                log(`Service Worker 註冊失敗: ${error.message}`, 'error');
+            }
+        }
+
+        async function clearAllCaches() {
+            try {
+                const cacheNames = await caches.keys();
+                log(`找到 ${cacheNames.length} 個緩存`);
+                
+                for (const cacheName of cacheNames) {
+                    await caches.delete(cacheName);
+                    log(`已清除緩存: ${cacheName}`, 'success');
+                }
+                
+                if (cacheNames.length === 0) {
+                    log('沒有找到緩存', 'log');
+                }
+            } catch (error) {
+                log(`清除緩存失敗: ${error.message}`, 'error');
+            }
+        }
+
+        async function checkCaches() {
+            try {
+                const cacheNames = await caches.keys();
+                log(`當前緩存: ${cacheNames.join(', ')}`);
+                
+                for (const cacheName of cacheNames) {
+                    const cache = await caches.open(cacheName);
+                    const requests = await cache.keys();
+                    log(`緩存 ${cacheName} 包含 ${requests.length} 個項目:`);
+                    requests.forEach(req => {
+                        log(`  - ${req.url}`, 'log');
+                    });
+                }
+            } catch (error) {
+                log(`檢查緩存失敗: ${error.message}`, 'error');
+            }
+        }
+
+        async function testManifest() {
+            try {
+                const response = await fetch('./manifest.json');
+                if (response.ok) {
+                    const manifest = await response.json();
+                    log(`Manifest 載入成功`, 'success');
+                    log(`圖標數量: ${manifest.icons?.length || 0}`);
+                    manifest.icons?.forEach(icon => {
+                        log(`  - ${icon.src} (${icon.sizes})`, 'log');
+                    });
+                } else {
+                    log(`Manifest 載入失敗: ${response.status}`, 'error');
+                }
+            } catch (error) {
+                log(`測試 Manifest 失敗: ${error.message}`, 'error');
+            }
+        }
+
+        // 自動檢查 Service Worker 狀態
+        window.addEventListener('load', () => {
+            log('頁面載入完成');
+            if ('serviceWorker' in navigator) {
+                log('瀏覽器支援 Service Worker', 'success');
+                navigator.serviceWorker.getRegistrations().then(registrations => {
+                    log(`當前有 ${registrations.length} 個 Service Worker`);
+                    registrations.forEach(reg => {
+                        log(`  - ${reg.scope} (狀態: ${reg.active?.state || 'unknown'})`);
+                    });
+                });
+            } else {
+                log('瀏覽器不支援 Service Worker', 'error');
+            }
+        });
+    </script>
+</body>
+</html>
