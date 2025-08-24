@@ -104,15 +104,22 @@ class FirebaseWalletManager {
         // 檢測手機端並優化體驗
         this.optimizeForMobile();
         
-        // iPhone PWA 自動離線模式
+        // iPhone PWA 自動離線模式（但不要立即啟用，給用戶選擇機會）
         if (this.autoEnableOffline) {
             setTimeout(() => {
                 if (!this.user && !this.isOfflineMode) {
-                    console.log('iPhone PWA 自動啟用離線模式');
-                    this.showNotification('iPhone PWA：自動啟用離線模式！', 'success');
-                    this.enableOfflineMode();
+                    console.log('iPhone PWA 延遲提示');
+                    // 不要自動啟用，而是提供友好提示
+                    this.showNotification('iPhone PWA 檢測：如果登入有問題，建議使用離線模式！', 'info');
+                    
+                    // 讓離線按鈕更明顯
+                    const offlineBtn = document.getElementById('offlineBtn');
+                    if (offlineBtn) {
+                        offlineBtn.style.animation = 'pulse 2s infinite';
+                        offlineBtn.style.background = 'linear-gradient(45deg, #28a745, #20c997)';
+                    }
                 }
-            }, 1000);
+            }, 5000); // 給用戶5秒時間嘗試登入
         }
     }
     
@@ -322,6 +329,9 @@ class FirebaseWalletManager {
         try {
             console.log('開始Google登入流程...');
             
+            // 顯示登入狀態
+            this.updateLoginStatus('正在初始化 Firebase...');
+            
             // 檢查Firebase是否正確初始化
             if (!window.auth) {
                 throw new Error('Firebase Auth 尚未初始化');
@@ -330,6 +340,8 @@ class FirebaseWalletManager {
             if (!window.authModule) {
                 throw new Error('Firebase Auth 模組尚未載入');
             }
+            
+            this.updateLoginStatus('Firebase 已就緒，開始登入...');
             
             // 檢查是否為移動設備和PWA
             const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
@@ -346,28 +358,41 @@ class FirebaseWalletManager {
             provider.addScope('profile');
             provider.addScope('email');
             
-            // iPhone PWA 有特殊限制，需要特別處理
+            // iPhone PWA 有特殊限制，但先讓用戶嘗試登入
             if (isIOS && isPWA) {
-                console.log('檢測到 iPhone PWA 模式');
-                this.showNotification('iPhone PWA 模式：登入功能受限，建議使用離線模式', 'warning');
+                console.log('檢測到 iPhone PWA 模式，嘗試登入...');
+                this.updateLoginStatus('iPhone PWA：正在嘗試 Google 登入...');
                 
-                // 提供用戶選擇
-                setTimeout(() => {
-                    if (confirm('iPhone PWA 模式下 Google 登入可能無法正常工作。\n\n建議使用離線模式，離線模式提供完整功能且資料安全。\n\n是否改用離線模式？')) {
-                        this.enableOfflineMode();
-                        return;
-                    }
-                }, 1000);
-                
-                // 如果用戶堅持要嘗試登入，使用特殊處理
+                // 直接嘗試登入，不要預先警告
                 try {
-                    console.log('iPhone PWA 嘗試登入...');
+                    console.log('iPhone PWA 嘗試彈出視窗登入...');
+                    this.updateLoginStatus('打開 Google 登入視窗...');
                     const result = await signInWithPopup(window.auth, provider);
-                    console.log('意外成功!', result.user.displayName);
-                    this.showNotification('登入成功！', 'success');
+                    
+                    if (result && result.user) {
+                        console.log('iPhone PWA 登入成功!', result.user.displayName);
+                        this.updateLoginStatus('登入成功！正在載入資料...');
+                        this.user = result.user;
+                        this.isOnlineMode = true;
+                        this.setupFirestoreListener();
+                        this.showNotification(`歡迎，${result.user.displayName || result.user.email}！`, 'success');
+                        this.clearLoginStatus();
+                        return; // 成功登入，直接返回
+                    }
                 } catch (pwaError) {
-                    console.error('iPhone PWA 登入失敗:', pwaError);
-                    throw new Error('iPhone PWA 登入限制: ' + pwaError.message);
+                    console.error('iPhone PWA 彈出視窗登入失敗:', pwaError);
+                    this.updateLoginStatus('彈出視窗失敗，嘗試重定向方式...');
+                    
+                    // 嘗試重定向方式
+                    try {
+                        console.log('嘗試重定向登入...');
+                        await signInWithRedirect(window.auth, provider);
+                        return; // 重定向會離開頁面
+                    } catch (redirectError) {
+                        console.error('iPhone PWA 重定向也失敗:', redirectError);
+                        this.updateLoginStatus('登入失敗：' + redirectError.message);
+                        throw new Error('iPhone PWA 登入完全失敗: ' + redirectError.message);
+                    }
                 }
             } else if (isMobile || isIOS) {
                 console.log('使用重定向登入...');
@@ -424,15 +449,28 @@ class FirebaseWalletManager {
             this.showNotification(errorMessage, 'error');
             
             // 顯示診斷按鈕供用戶檢查連線問題
-            document.getElementById('diagnosBtn').style.display = 'inline-block';
+            const diagnosBtn = document.getElementById('diagnosBtn');
+            if (diagnosBtn) {
+                diagnosBtn.style.display = 'inline-block';
+            }
             
-            // 如果適合，自動提供離線模式選項
+            // 詳細錯誤記錄
+            console.error('===== 登入失敗詳細資訊 =====');
+            console.error('錯誤代碼:', error.code);
+            console.error('錯誤訊息:', error.message);
+            console.error('完整錯誤:', error);
+            console.error('===========================');
+            
+            // 如果適合，詢問是否使用離線模式（但不要自動觸發）
             if (shouldOfferOffline) {
                 setTimeout(() => {
-                    if (confirm(errorMessage + '\n\n是否改用離線模式？離線模式提供完整功能。')) {
+                    const userChoice = confirm(errorMessage + '\n\n詳細錯誤：' + error.code + '\n\n是否改用離線模式？離線模式提供完整功能。');
+                    if (userChoice) {
                         this.enableOfflineMode();
+                    } else {
+                        console.log('用戶選擇不使用離線模式，停留在登入頁面');
                     }
-                }, 2000);
+                }, 3000); // 延長到3秒，讓用戶看清楚錯誤信息
             }
         }
     }
@@ -475,6 +513,24 @@ class FirebaseWalletManager {
         this.showNotification('已切換到離線模式', 'info');
         
         console.log('離線模式啟用完成');
+    }
+    
+    // 更新登入狀態顯示
+    updateLoginStatus(message) {
+        const statusElement = document.getElementById('loginStatus');
+        if (statusElement) {
+            statusElement.textContent = message;
+            statusElement.style.display = 'block';
+            console.log('登入狀態:', message);
+        }
+    }
+    
+    // 清除登入狀態顯示
+    clearLoginStatus() {
+        const statusElement = document.getElementById('loginStatus');
+        if (statusElement) {
+            statusElement.style.display = 'none';
+        }
     }
     
     // 刷新離線模式
