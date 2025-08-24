@@ -19,12 +19,11 @@ class FirebaseWalletManager {
             console.log('檢測到 iPhone PWA 模式，將優化體驗');
             this.isIPhonePWA = true;
             
-            // 延遲顯示友好提示
-            setTimeout(() => {
-                this.showNotification('iPhone PWA 檢測：建議使用離線模式獲得最佳體驗！', 'info');
-            }, 3000);
+            // 設置標記，在 DOM 準備好後自動啟用離線模式
+            this.autoEnableOffline = true;
         } else {
             this.isIPhonePWA = false;
+            this.autoEnableOffline = false;
         }
         
         // 等待 Firebase 初始化完成
@@ -104,6 +103,17 @@ class FirebaseWalletManager {
         
         // 檢測手機端並優化體驗
         this.optimizeForMobile();
+        
+        // iPhone PWA 自動離線模式
+        if (this.autoEnableOffline) {
+            setTimeout(() => {
+                if (!this.user && !this.isOfflineMode) {
+                    console.log('iPhone PWA 自動啟用離線模式');
+                    this.showNotification('iPhone PWA：自動啟用離線模式！', 'success');
+                    this.enableOfflineMode();
+                }
+            }, 1000);
+        }
     }
     
     // 手機端優化
@@ -237,7 +247,14 @@ class FirebaseWalletManager {
 
     // 顯示離線區域
     showOfflineSection() {
-        document.getElementById('offlineSection').style.display = 'flex';
+        console.log('顯示離線區域');
+        const offlineSection = document.getElementById('offlineSection');
+        if (offlineSection) {
+            offlineSection.style.display = 'flex';
+            console.log('離線區域已設置為顯示');
+        } else {
+            console.error('找不到離線區域元素');
+        }
     }
 
     // 隱藏離線區域
@@ -434,16 +451,20 @@ class FirebaseWalletManager {
 
     // 啟用離線模式
     enableOfflineMode() {
+        console.log('開始啟用離線模式');
         this.isOfflineMode = true;
         
         // 隱藏登入區域和用戶區域
+        console.log('隱藏登入和用戶區域');
         this.hideLoginSection();
         this.hideUserSection();
         
         // 顯示離線狀態區域
+        console.log('顯示離線狀態區域');
         this.showOfflineSection();
         
         // 顯示錢包區域
+        console.log('顯示錢包區域');
         this.showWalletSection();
         
         // 從本地儲存載入錢包資料
@@ -453,7 +474,7 @@ class FirebaseWalletManager {
         // 顯示離線模式通知
         this.showNotification('已切換到離線模式', 'info');
         
-        console.log('已啟用離線模式');
+        console.log('離線模式啟用完成');
     }
     
     // 刷新離線模式
