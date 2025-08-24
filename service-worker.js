@@ -1,12 +1,11 @@
-const CACHE_NAME = 'wallet-app-v1.0.3';
+const CACHE_NAME = 'wallet-app-v1.0.4';
 const urlsToCache = [
   './',
   './index.html',
   './styles.css',
   './firebase-script.js',
   './manifest.json',
-  './favicon.ico',
-  './icons/icon-144x144.svg'
+  './favicon.ico'
 ];
 
 // 強制清理所有舊緩存

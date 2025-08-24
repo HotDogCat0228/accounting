@@ -2,7 +2,7 @@
   "name": "智能存錢記帳程式",
   "short_name": "錢包管理",
   "description": "智能存錢記帳程式，幫助您管理財務目標和追蹤收支紀錄",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
@@ -15,13 +15,8 @@
   "icons": [
     {
       "src": "favicon.ico",
-      "sizes": "16x16 32x32",
-      "type": "image/x-icon"
-    },
-    {
-      "src": "icons/icon-144x144.svg",
-      "sizes": "144x144",
-      "type": "image/svg+xml",
+      "sizes": "16x16 32x32 48x48",
+      "type": "image/x-icon",
       "purpose": "any maskable"
     }
   ],
