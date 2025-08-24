@@ -311,26 +311,47 @@ class FirebaseWalletManager {
 
     // 設定 Firestore 監聽器
     setupFirestoreListener() {
-        if (!this.user) return;
+        if (!this.user) {
+            console.error('無法設置監聽器：用戶未登入');
+            return;
+        }
+
+        console.log('開始設置 Firestore 監聽器，用戶ID:', this.user.uid);
 
         // 動態導入 Firestore 模組
         import('https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js')
             .then(({ collection, query, orderBy, onSnapshot, doc, setDoc, updateDoc, deleteDoc, addDoc }) => {
                 window.firestoreModule = { collection, query, orderBy, onSnapshot, doc, setDoc, updateDoc, deleteDoc, addDoc };
                 
+                console.log('Firestore 模組載入成功，設置監聽器...');
                 const walletsRef = collection(window.db, 'users', this.user.uid, 'wallets');
                 const q = query(walletsRef, orderBy('createdAt', 'desc'));
                 
-                this.unsubscribe = onSnapshot(q, (snapshot) => {
-                    this.wallets = [];
-                    snapshot.forEach((doc) => {
-                        this.wallets.push({
-                            id: doc.id,
-                            ...doc.data()
+                this.unsubscribe = onSnapshot(q, 
+                    (snapshot) => {
+                        console.log('監聽器觸發，收到', snapshot.size, '個錢包');
+                        this.wallets = [];
+                        snapshot.forEach((doc) => {
+                            this.wallets.push({
+                                id: doc.id,
+                                ...doc.data()
+                            });
                         });
-                    });
-                    this.renderWallets();
-                });
+                        this.renderWallets();
+                    },
+                    (error) => {
+                        console.error('監聽器錯誤:', error);
+                        console.error('錯誤代碼:', error.code);
+                        console.error('錯誤訊息:', error.message);
+                        this.showNotification('載入錢包失敗：' + error.message, 'error');
+                    }
+                );
+                
+                console.log('監聽器設置完成');
+            })
+            .catch(error => {
+                console.error('載入 Firestore 模組失敗:', error);
+                this.showNotification('載入失敗，請重試', 'error');
             });
     }
 
@@ -851,11 +872,22 @@ class FirebaseWalletManager {
 
         try {
             const { doc, updateDoc, getDoc } = window.firestoreModule;
+            
+            if (!window.firestoreModule) {
+                throw new Error('Firestore 模組未載入');
+            }
+            
             const walletRef = doc(window.db, 'users', this.user.uid, 'wallets', wallet.id);
+            console.log('準備處理交易，錢包路徑:', `users/${this.user.uid}/wallets/${wallet.id}`);
             
             // 獲取當前錢包數據，包含現有交易記錄
             const walletDoc = await getDoc(walletRef);
+            if (!walletDoc.exists()) {
+                throw new Error('錢包文檔不存在');
+            }
+            
             const currentTransactions = walletDoc.data().transactions || [];
+            console.log('當前交易記錄數量:', currentTransactions.length);
             
             // 創建新的交易記錄
             const transactionData = {
@@ -871,6 +903,7 @@ class FirebaseWalletManager {
 
             // 將新交易添加到交易記錄列表
             const updatedTransactions = [...currentTransactions, transactionData];
+            console.log('準備更新交易記錄，新記錄數量:', updatedTransactions.length);
 
             // 同時更新錢包金額和交易記錄
             await updateDoc(walletRef, { 
@@ -882,11 +915,17 @@ class FirebaseWalletManager {
                 ? `成功存入 ${this.formatCurrency(amount)}`
                 : `成功提取 ${this.formatCurrency(amount)}`;
             
+            console.log('交易處理成功:', successMessage);
             this.showNotification(successMessage, 'success');
             this.hideTransactionModal();
         } catch (error) {
-            console.error('交易失敗:', error);
-            this.showNotification('交易失敗，請重試', 'error');
+            console.error('交易失敗詳細信息:');
+            console.error('錯誤對象:', error);
+            console.error('錯誤代碼:', error.code);
+            console.error('錯誤訊息:', error.message);
+            console.error('用戶ID:', this.user?.uid);
+            console.error('錢包ID:', wallet?.id);
+            this.showNotification(`交易失敗：${error.message}`, 'error');
         }
     }
 
@@ -1346,7 +1385,7 @@ class FirebaseWalletManager {
 let firebaseWalletManager;
 
 document.addEventListener('DOMContentLoaded', () => {
-    console.log('DOM 載入完成，開始初始化 Firebase 錢包管理器');
+    console.log('DOM 載入完成，開始初始化 Firebase 錢包管理器 - Version 2.1');
     
     try {
         firebaseWalletManager = new FirebaseWalletManager();
@@ -1354,7 +1393,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // 確保全局可訪問
         window.firebaseWalletManager = firebaseWalletManager;
         
-        console.log('Firebase 錢包管理器初始化完成');
+        console.log('Firebase 錢包管理器初始化完成 - Version 2.1');
         
         // 檢測設備類型並顯示對應提示
         const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
