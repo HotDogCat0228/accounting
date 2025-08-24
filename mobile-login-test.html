@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>手機登入測試</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+            color: white;
+        }
+        
+        .container {
+            max-width: 400px;
+            margin: 0 auto;
+            background: rgba(255, 255, 255, 0.1);
+            padding: 30px;
+            border-radius: 15px;
+            backdrop-filter: blur(10px);
+        }
+        
+        h1 {
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 24px;
+        }
+        
+        .info {
+            background: rgba(255, 255, 255, 0.2);
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            font-size: 14px;
+            line-height: 1.5;
+        }
+        
+        .button {
+            width: 100%;
+            padding: 15px;
+            margin: 10px 0;
+            border: none;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            background: white;
+            color: #667eea;
+        }
+        
+        .button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        }
+        
+        .button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+        
+        .log {
+            background: rgba(0, 0, 0, 0.3);
+            padding: 15px;
+            border-radius: 10px;
+            margin: 10px 0;
+            font-family: monospace;
+            font-size: 12px;
+            max-height: 300px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+        
+        .status {
+            padding: 10px;
+            border-radius: 8px;
+            margin: 10px 0;
+            font-weight: 600;
+        }
+        
+        .success { background: rgba(76, 175, 80, 0.8); }
+        .error { background: rgba(244, 67, 54, 0.8); }
+        .info-status { background: rgba(33, 150, 243, 0.8); }
+        
+        .device-info {
+            font-size: 12px;
+            opacity: 0.8;
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔐 手機登入診斷</h1>
+        
+        <div class="device-info" id="deviceInfo">
+            檢測中...
+        </div>
+        
+        <div class="info">
+            <strong>測試目的：</strong><br>
+            診斷 iPhone/Android Firebase Google 登入問題
+        </div>
+        
+        <button class="button" id="testBtn" onclick="testLogin()">
+            開始 Google 登入測試
+        </button>
+        
+        <button class="button" onclick="checkRedirectResult()">
+            檢查重定向結果
+        </button>
+        
+        <button class="button" onclick="clearLogs()">
+            清除日誌
+        </button>
+        
+        <div id="status"></div>
+        <div class="log" id="logArea"></div>
+    </div>
+
+    <!-- Firebase SDK -->
+    <script type="module">
+        import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
+        import { getAuth, GoogleAuthProvider, signInWithRedirect, getRedirectResult, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
+        
+        // Firebase 配置
+        const firebaseConfig = {
+            apiKey: "AIzaSyB1DXR1TC11ZDhIXAeyWyn0gXnxaYW6Cjs",
+            authDomain: "my-wallet-app-815ce.firebaseapp.com",
+            projectId: "my-wallet-app-815ce",
+            storageBucket: "my-wallet-app-815ce.firebasestorage.app",
+            messagingSenderId: "656225813708",
+            appId: "1:656225813708:web:2acd800eedd53408b4ae69",
+            measurementId: "G-Z9MECGE7T0"
+        };
+        
+        // 初始化 Firebase
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        
+        // 全域變數
+        window.auth = auth;
+        window.GoogleAuthProvider = GoogleAuthProvider;
+        window.signInWithRedirect = signInWithRedirect;
+        window.getRedirectResult = getRedirectResult;
+        
+        // 日誌函數
+        function log(message, type = 'log') {
+            const timestamp = new Date().toLocaleTimeString();
+            const logArea = document.getElementById('logArea');
+            const logEntry = `[${timestamp}] ${message}\n`;
+            logArea.textContent += logEntry;
+            logArea.scrollTop = logArea.scrollHeight;
+            
+            console.log(message);
+        }
+        
+        function showStatus(message, type = 'info') {
+            const statusDiv = document.getElementById('status');
+            statusDiv.innerHTML = `<div class="status ${type}-status">${message}</div>`;
+        }
+        
+        // 設備檢測
+        function detectDevice() {
+            const userAgent = navigator.userAgent;
+            const deviceInfo = document.getElementById('deviceInfo');
+            
+            let device = 'Unknown';
+            let browser = 'Unknown';
+            
+            if (/iPhone/i.test(userAgent)) device = 'iPhone';
+            else if (/iPad/i.test(userAgent)) device = 'iPad';
+            else if (/Android/i.test(userAgent)) device = 'Android';
+            else if (/Windows/i.test(userAgent)) device = 'Windows';
+            else if (/Macintosh/i.test(userAgent)) device = 'Mac';
+            
+            if (/Safari/i.test(userAgent) && !/Chrome/i.test(userAgent)) browser = 'Safari';
+            else if (/Chrome/i.test(userAgent)) browser = 'Chrome';
+            else if (/Firefox/i.test(userAgent)) browser = 'Firefox';
+            
+            const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(userAgent);
+            const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
+            
+            deviceInfo.innerHTML = `
+                📱 設備: ${device}<br>
+                🌐 瀏覽器: ${browser}<br>
+                📲 手機: ${isMobile ? '是' : '否'}<br>
+                🚀 PWA模式: ${isStandalone ? '是' : '否'}<br>
+                🔗 User Agent: ${userAgent.substring(0, 50)}...
+            `;
+            
+            log(`設備檢測完成: ${device} ${browser} (手機: ${isMobile})`);
+            return { device, browser, isMobile, isStandalone };
+        }
+        
+        // 測試登入
+        window.testLogin = async function() {
+            const btn = document.getElementById('testBtn');
+            btn.disabled = true;
+            btn.textContent = '登入中...';
+            
+            try {
+                log('=== 開始登入測試 ===');
+                showStatus('正在初始化登入...', 'info');
+                
+                // 檢查 Firebase 初始化
+                if (!window.auth) {
+                    throw new Error('Firebase Auth 未初始化');
+                }
+                log('✓ Firebase Auth 已初始化');
+                
+                // 創建 Google Provider
+                const provider = new GoogleAuthProvider();
+                provider.addScope('email');
+                provider.addScope('profile');
+                log('✓ Google Provider 已創建');
+                
+                // 設定自訂參數
+                provider.setCustomParameters({
+                    'hd': '', // 允許任何域名
+                    'prompt': 'select_account'
+                });
+                log('✓ Provider 參數已設定');
+                
+                showStatus('正在導向 Google 登入頁面...', 'info');
+                log('開始重定向登入...');
+                
+                // 執行重定向登入
+                await signInWithRedirect(auth, provider);
+                log('✓ 重定向請求已發送');
+                
+            } catch (error) {
+                log(`❌ 登入失敗: ${error.message}`);
+                log(`錯誤詳情: ${JSON.stringify(error, null, 2)}`);
+                showStatus(`登入失敗: ${error.message}`, 'error');
+                
+                btn.disabled = false;
+                btn.textContent = '重新測試登入';
+            }
+        };
+        
+        // 檢查重定向結果
+        window.checkRedirectResult = async function() {
+            try {
+                log('=== 檢查重定向結果 ===');
+                showStatus('檢查登入結果...', 'info');
+                
+                const result = await getRedirectResult(auth);
+                
+                if (result) {
+                    log('✓ 找到重定向結果');
+                    log(`用戶: ${result.user.displayName || result.user.email}`);
+                    log(`UID: ${result.user.uid}`);
+                    showStatus(`登入成功！歡迎 ${result.user.displayName || result.user.email}`, 'success');
+                } else {
+                    log('ℹ 沒有重定向結果');
+                    showStatus('沒有找到登入結果', 'info');
+                }
+                
+            } catch (error) {
+                log(`❌ 檢查重定向結果失敗: ${error.message}`);
+                log(`錯誤詳情: ${JSON.stringify(error, null, 2)}`);
+                showStatus(`檢查失敗: ${error.message}`, 'error');
+            }
+        };
+        
+        // 清除日誌
+        window.clearLogs = function() {
+            document.getElementById('logArea').textContent = '';
+            document.getElementById('status').innerHTML = '';
+            log('日誌已清除');
+        };
+        
+        // 監聽認證狀態變化
+        onAuthStateChanged(auth, (user) => {
+            if (user) {
+                log(`🎉 用戶已登入: ${user.displayName || user.email}`);
+                showStatus(`已登入: ${user.displayName || user.email}`, 'success');
+                
+                // 顯示用戶資訊
+                log(`- 顯示名稱: ${user.displayName}`);
+                log(`- 電子郵件: ${user.email}`);
+                log(`- UID: ${user.uid}`);
+                log(`- 頭像: ${user.photoURL}`);
+                
+                document.getElementById('testBtn').textContent = '已登入 - 重新測試';
+                document.getElementById('testBtn').disabled = false;
+            } else {
+                log('👤 用戶未登入');
+                showStatus('尚未登入', 'info');
+                document.getElementById('testBtn').disabled = false;
+            }
+        });
+        
+        // 頁面載入時檢測設備和檢查重定向結果
+        window.addEventListener('load', () => {
+            detectDevice();
+            
+            // 自動檢查重定向結果
+            setTimeout(() => {
+                checkRedirectResult();
+            }, 1000);
+        });
+        
+    </script>
+</body>
+</html>

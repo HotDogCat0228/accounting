@@ -47,7 +47,21 @@ class FirebaseWalletManager {
                 window.authModule = authModule;
             }
             
-            const { onAuthStateChanged } = window.authModule;
+            const { onAuthStateChanged, getRedirectResult } = window.authModule;
+            
+            // 先檢查是否有重定向結果（手機登入回來時）
+            try {
+                console.log('檢查重定向登入結果...');
+                const redirectResult = await getRedirectResult(window.auth);
+                if (redirectResult && redirectResult.user) {
+                    console.log('發現重定向登入結果:', redirectResult.user.email);
+                    this.showNotification(`歡迎回來，${redirectResult.user.displayName || redirectResult.user.email}！`, 'success');
+                }
+            } catch (redirectError) {
+                console.warn('檢查重定向結果時出錯:', redirectError);
+            }
+            
+            // 設定認證狀態監聽器
             onAuthStateChanged(window.auth, (user) => {
                 this.handleAuthStateChange(user);
             });
@@ -151,8 +165,11 @@ class FirebaseWalletManager {
     // Google 登入
     async loginWithGoogle() {
         try {
+            console.log('開始 Google 登入流程...');
+            
             // 確保 Firebase Auth 模組已載入
             if (!window.authModule) {
+                console.log('載入 Firebase Auth 模組...');
                 const authModule = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js');
                 window.authModule = authModule;
             }
@@ -160,54 +177,88 @@ class FirebaseWalletManager {
             const { GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult } = window.authModule;
             const provider = new GoogleAuthProvider();
             
-            // 檢查是否為手機設備
-            const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+            // 添加範圍和自訂參數
+            provider.addScope('email');
+            provider.addScope('profile');
+            provider.setCustomParameters({
+                'hd': '',
+                'prompt': 'select_account'
+            });
             
-            if (isMobile) {
-                // 手機端：先檢查重定向結果
-                try {
-                    const redirectResult = await getRedirectResult(window.auth);
-                    if (redirectResult && redirectResult.user) {
-                        this.showNotification('登入成功！', 'success');
-                        return;
-                    }
-                } catch (redirectError) {
-                    console.log('檢查重定向結果失敗:', redirectError);
-                }
+            // 檢查是否為手機設備
+            const userAgent = navigator.userAgent;
+            const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(userAgent);
+            const isIOS = /iPad|iPhone|iPod/.test(userAgent);
+            const isSafari = /Safari/.test(userAgent) && !/Chrome/.test(userAgent);
+            const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
+            
+            console.log(`設備檢測 - 手機: ${isMobile}, iOS: ${isIOS}, Safari: ${isSafari}, PWA: ${isStandalone}`);
+            
+            // 手機或 PWA 模式使用重定向
+            if (isMobile || isStandalone || isIOS) {
+                console.log('使用重定向登入方式');
+                this.showNotification('正在導向 Google 登入頁面...', 'info');
+                
+                // 保存當前狀態（可選）
+                sessionStorage.setItem('loginAttempt', Date.now().toString());
                 
                 // 使用重定向登入
-                console.log('手機端：使用重定向登入');
-                this.showNotification('正在導向 Google 登入...', 'info');
                 await signInWithRedirect(window.auth, provider);
+                console.log('重定向請求已發送');
+                
             } else {
-                // 桌面端：使用彈出視窗
-                console.log('桌面端：使用彈出視窗登入');
+                // 桌面端使用彈出視窗
+                console.log('使用彈出視窗登入方式');
+                this.showNotification('正在開啟 Google 登入視窗...', 'info');
+                
                 const result = await signInWithPopup(window.auth, provider);
                 if (result && result.user) {
-                    this.showNotification('登入成功！', 'success');
+                    console.log('彈出視窗登入成功:', result.user.email);
+                    this.showNotification(`登入成功！歡迎 ${result.user.displayName || result.user.email}`, 'success');
                 }
             }
+            
         } catch (error) {
-            console.error('登入失敗:', error);
+            console.error('登入失敗詳情:', error);
+            
             let errorMessage = '登入失敗';
             
             if (error.code) {
                 switch (error.code) {
                     case 'auth/popup-blocked':
-                        errorMessage = '彈出視窗被阻擋，請允許彈出視窗';
+                        errorMessage = '彈出視窗被阻擋，請允許彈出視窗或重新整理頁面';
                         break;
                     case 'auth/popup-closed-by-user':
                         errorMessage = '登入流程被取消';
                         break;
                     case 'auth/network-request-failed':
-                        errorMessage = '網路連線失敗，請檢查網路';
+                        errorMessage = '網路連線失敗，請檢查網路連線';
+                        break;
+                    case 'auth/operation-not-allowed':
+                        errorMessage = 'Google 登入未啟用，請聯絡管理員';
+                        break;
+                    case 'auth/invalid-api-key':
+                        errorMessage = 'Firebase 配置錯誤';
+                        break;
+                    case 'auth/app-not-authorized':
+                        errorMessage = '應用程式未授權，請聯絡管理員';
                         break;
                     default:
-                        errorMessage = `登入失敗: ${error.message}`;
+                        errorMessage = `登入錯誤 (${error.code}): ${error.message}`;
                 }
+            } else {
+                errorMessage = `登入失敗: ${error.message}`;
             }
             
             this.showNotification(errorMessage, 'error');
+            
+            // 如果是手機設備且重定向失敗，建議重新整理
+            const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+            if (isMobile && error.code !== 'auth/popup-closed-by-user') {
+                setTimeout(() => {
+                    this.showNotification('手機登入失敗時，請嘗試重新整理頁面', 'info');
+                }, 3000);
+            }
         }
     }
 
