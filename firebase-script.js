@@ -175,8 +175,101 @@ class FirebaseWalletManager {
 
     // 顯示錢包區域
     showWalletSection() {
+        console.log('顯示錢包區域');
         document.getElementById('walletsContainer').style.display = 'grid';
         document.getElementById('addWalletBtn').style.display = 'inline-block';
+        
+        // 確保事件監聽器正確綁定
+        this.ensureEventListeners();
+    }
+
+    // 確保事件監聽器已綁定
+    ensureEventListeners() {
+        console.log('檢查事件監聽器綁定狀態');
+        
+        // 檢查主要按鈕是否有事件監聽器
+        const addWalletBtn = document.getElementById('addWalletBtn');
+        if (addWalletBtn && !addWalletBtn.hasAttribute('data-event-bound')) {
+            console.log('重新綁定新增錢包按鈕事件');
+            addWalletBtn.addEventListener('click', () => {
+                console.log('新增錢包按鈕被點擊');
+                this.showAddWalletModal();
+            });
+            addWalletBtn.setAttribute('data-event-bound', 'true');
+        }
+
+        // 檢查模態視窗按鈕
+        const saveWalletBtn = document.getElementById('saveWalletBtn');
+        if (saveWalletBtn && !saveWalletBtn.hasAttribute('data-event-bound')) {
+            console.log('重新綁定儲存錢包按鈕事件');
+            saveWalletBtn.addEventListener('click', () => {
+                console.log('儲存錢包按鈕被點擊');
+                this.saveWallet();
+            });
+            saveWalletBtn.setAttribute('data-event-bound', 'true');
+        }
+
+        const cancelBtn = document.getElementById('cancelBtn');
+        if (cancelBtn && !cancelBtn.hasAttribute('data-event-bound')) {
+            console.log('重新綁定取消按鈕事件');
+            cancelBtn.addEventListener('click', () => {
+                console.log('取消按鈕被點擊');
+                this.hideAddWalletModal();
+            });
+            cancelBtn.setAttribute('data-event-bound', 'true');
+        }
+
+        // 檢查交易模態視窗按鈕
+        const confirmTransactionBtn = document.getElementById('confirmTransactionBtn');
+        if (confirmTransactionBtn && !confirmTransactionBtn.hasAttribute('data-event-bound')) {
+            console.log('重新綁定確認交易按鈕事件');
+            confirmTransactionBtn.addEventListener('click', () => {
+                console.log('確認交易按鈕被點擊');
+                this.processTransaction();
+            });
+            confirmTransactionBtn.setAttribute('data-event-bound', 'true');
+        }
+
+        const cancelTransactionBtn = document.getElementById('cancelTransactionBtn');
+        if (cancelTransactionBtn && !cancelTransactionBtn.hasAttribute('data-event-bound')) {
+            console.log('重新綁定取消交易按鈕事件');
+            cancelTransactionBtn.addEventListener('click', () => {
+                console.log('取消交易按鈕被點擊');
+                this.hideTransactionModal();
+            });
+            cancelTransactionBtn.setAttribute('data-event-bound', 'true');
+        }
+
+        // 檢查編輯模態視窗按鈕
+        const saveEditBtn = document.getElementById('saveEditBtn');
+        if (saveEditBtn && !saveEditBtn.hasAttribute('data-event-bound')) {
+            console.log('重新綁定儲存編輯按鈕事件');
+            saveEditBtn.addEventListener('click', () => {
+                console.log('儲存編輯按鈕被點擊');
+                this.saveEditedWallet();
+            });
+            saveEditBtn.setAttribute('data-event-bound', 'true');
+        }
+
+        const cancelEditBtn = document.getElementById('cancelEditBtn');
+        if (cancelEditBtn && !cancelEditBtn.hasAttribute('data-event-bound')) {
+            console.log('重新綁定取消編輯按鈕事件');
+            cancelEditBtn.addEventListener('click', () => {
+                console.log('取消編輯按鈕被點擊');
+                this.hideEditWalletModal();
+            });
+            cancelEditBtn.setAttribute('data-event-bound', 'true');
+        }
+
+        const deleteWalletBtn = document.getElementById('deleteWalletBtn');
+        if (deleteWalletBtn && !deleteWalletBtn.hasAttribute('data-event-bound')) {
+            console.log('重新綁定刪除錢包按鈕事件');
+            deleteWalletBtn.addEventListener('click', () => {
+                console.log('刪除錢包按鈕被點擊');
+                this.deleteCurrentWallet();
+            });
+            deleteWalletBtn.setAttribute('data-event-bound', 'true');
+        }
     }
 
     // 隱藏錢包區域
@@ -477,19 +570,24 @@ class FirebaseWalletManager {
 
     // 渲染所有錢包
     renderWallets() {
+        console.log('渲染錢包列表，錢包數量:', this.wallets.length);
         const container = document.getElementById('walletsContainer');
         
         if (this.wallets.length === 0) {
+            console.log('沒有錢包，顯示空狀態');
             this.showEmptyState();
             return;
         }
 
         container.innerHTML = '';
         
-        this.wallets.forEach(wallet => {
+        this.wallets.forEach((wallet, index) => {
+            console.log(`渲染錢包 ${index + 1}:`, wallet.name);
             const walletCard = this.createWalletCard(wallet);
             container.appendChild(walletCard);
         });
+        
+        console.log('錢包渲染完成');
     }
 
     // 創建錢包卡片
@@ -540,8 +638,25 @@ class FirebaseWalletManager {
 
     // 顯示新增錢包彈出視窗
     showAddWalletModal() {
-        document.getElementById('addWalletModal').style.display = 'block';
-        document.getElementById('walletName').focus();
+        console.log('準備顯示新增錢包彈出視窗');
+        const modal = document.getElementById('addWalletModal');
+        const walletNameInput = document.getElementById('walletName');
+        
+        if (!modal) {
+            console.error('找不到新增錢包模態視窗元素');
+            this.showNotification('介面載入錯誤，請重新整理頁面', 'error');
+            return;
+        }
+        
+        if (!walletNameInput) {
+            console.error('找不到錢包名稱輸入框');
+            this.showNotification('介面載入錯誤，請重新整理頁面', 'error');
+            return;
+        }
+        
+        console.log('顯示新增錢包模態視窗');
+        modal.style.display = 'block';
+        walletNameInput.focus();
     }
 
     // 隱藏新增錢包彈出視窗
@@ -605,15 +720,33 @@ class FirebaseWalletManager {
 
     // 顯示交易彈出視窗
     showTransactionModal(walletId, type) {
+        console.log(`顯示交易模態視窗 - 錢包ID: ${walletId}, 類型: ${type}`);
         this.currentTransactionWallet = walletId;
         this.transactionType = type;
         
         const wallet = this.wallets.find(w => w.id === walletId);
+        if (!wallet) {
+            console.error('找不到指定的錢包');
+            this.showNotification('錢包不存在，請重新整理頁面', 'error');
+            return;
+        }
+        
         const title = type === 'add' ? `存入 - ${wallet.name}` : `提取 - ${wallet.name}`;
         
-        document.getElementById('transactionTitle').textContent = title;
-        document.getElementById('transactionModal').style.display = 'block';
-        document.getElementById('transactionAmount').focus();
+        const modal = document.getElementById('transactionModal');
+        const titleElement = document.getElementById('transactionTitle');
+        const amountInput = document.getElementById('transactionAmount');
+        
+        if (!modal || !titleElement || !amountInput) {
+            console.error('交易模態視窗元素缺失');
+            this.showNotification('介面載入錯誤，請重新整理頁面', 'error');
+            return;
+        }
+        
+        console.log('顯示交易模態視窗');
+        titleElement.textContent = title;
+        modal.style.display = 'block';
+        amountInput.focus();
     }
 
     // 隱藏交易彈出視窗
