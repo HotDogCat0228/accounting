@@ -850,12 +850,16 @@ class FirebaseWalletManager {
         }
 
         try {
-            const { doc, updateDoc, collection, addDoc } = window.firestoreModule;
+            const { doc, updateDoc, getDoc } = window.firestoreModule;
             const walletRef = doc(window.db, 'users', this.user.uid, 'wallets', wallet.id);
-            const transactionsRef = collection(window.db, 'users', this.user.uid, 'wallets', wallet.id, 'transactions');
             
-            // 創建交易記錄
+            // 獲取當前錢包數據，包含現有交易記錄
+            const walletDoc = await getDoc(walletRef);
+            const currentTransactions = walletDoc.data().transactions || [];
+            
+            // 創建新的交易記錄
             const transactionData = {
+                id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
                 type: this.transactionType,
                 amount: amount,
                 note: note || '',
@@ -865,11 +869,14 @@ class FirebaseWalletManager {
                 createdAt: new Date()
             };
 
-            // 同時更新錢包金額和添加交易記錄
-            await Promise.all([
-                updateDoc(walletRef, { amount: newAmount }),
-                addDoc(transactionsRef, transactionData)
-            ]);
+            // 將新交易添加到交易記錄列表
+            const updatedTransactions = [...currentTransactions, transactionData];
+
+            // 同時更新錢包金額和交易記錄
+            await updateDoc(walletRef, { 
+                amount: newAmount,
+                transactions: updatedTransactions
+            });
 
             const successMessage = this.transactionType === 'add' 
                 ? `成功存入 ${this.formatCurrency(amount)}`
@@ -996,28 +1003,27 @@ class FirebaseWalletManager {
     // 載入交易記錄
     async loadTransactionHistory(walletId) {
         try {
-            const { collection, query, orderBy, onSnapshot } = window.firestoreModule;
-            const transactionsRef = collection(window.db, 'users', this.user.uid, 'wallets', walletId, 'transactions');
-            const q = query(transactionsRef, orderBy('createdAt', 'desc'));
-            
-            // 設定即時監聽器
-            if (this.transactionUnsubscribe) {
-                this.transactionUnsubscribe();
+            console.log('開始載入交易記錄...');
+            const wallet = this.wallets.find(w => w.id === walletId);
+            if (!wallet) {
+                console.error('找不到錢包');
+                this.showNotification('錢包不存在', 'error');
+                return;
             }
+
+            // 從錢包數據中獲取交易記錄
+            this.currentTransactions = wallet.transactions || [];
             
-            this.transactionUnsubscribe = onSnapshot(q, (snapshot) => {
-                this.currentTransactions = [];
-                snapshot.forEach((doc) => {
-                    this.currentTransactions.push({
-                        id: doc.id,
-                        ...doc.data()
-                    });
-                });
-                
-                console.log(`載入 ${this.currentTransactions.length} 筆交易記錄`);
-                this.renderTransactionHistory();
-                this.updateTransactionSummary();
+            // 按創建時間排序（最新的在前）
+            this.currentTransactions.sort((a, b) => {
+                const dateA = a.createdAt?.toDate?.() || new Date(a.createdAt) || new Date(a.date);
+                const dateB = b.createdAt?.toDate?.() || new Date(b.createdAt) || new Date(b.date);
+                return dateB - dateA;
             });
+            
+            console.log(`載入 ${this.currentTransactions.length} 筆交易記錄`);
+            this.renderTransactionHistory();
+            this.updateTransactionSummary();
             
         } catch (error) {
             console.error('載入交易記錄失敗:', error);
@@ -1149,13 +1155,6 @@ class FirebaseWalletManager {
     // 隱藏交易記錄模態視窗
     hideTransactionHistoryModal() {
         document.getElementById('transactionHistoryModal').style.display = 'none';
-        
-        // 清除監聽器
-        if (this.transactionUnsubscribe) {
-            this.transactionUnsubscribe();
-            this.transactionUnsubscribe = null;
-        }
-        
         this.currentHistoryWallet = null;
         this.currentTransactions = [];
     }
@@ -1204,27 +1203,39 @@ class FirebaseWalletManager {
         }
 
         try {
-            const { doc, updateDoc } = window.firestoreModule;
-            const transactionRef = doc(
-                window.db, 'users', this.user.uid, 'wallets', 
-                this.currentHistoryWallet, 'transactions', 
-                this.currentEditingTransaction.id
-            );
-
-            // 如果金額或類型改變，需要重新計算錢包餘額
-            const oldTransaction = this.currentEditingTransaction;
-            const amountDiff = this.calculateAmountDifference(oldTransaction, { type, amount });
+            const { doc, updateDoc, getDoc } = window.firestoreModule;
+            const walletRef = doc(window.db, 'users', this.user.uid, 'wallets', this.currentHistoryWallet);
             
-            if (amountDiff !== 0) {
-                await this.updateWalletBalance(this.currentHistoryWallet, amountDiff);
+            // 獲取當前錢包數據
+            const walletDoc = await getDoc(walletRef);
+            const currentTransactions = walletDoc.data().transactions || [];
+            
+            // 找到並更新目標交易記錄
+            const transactionIndex = currentTransactions.findIndex(t => t.id === this.currentEditingTransaction.id);
+            if (transactionIndex === -1) {
+                this.showNotification('找不到交易記錄', 'error');
+                return;
             }
 
-            await updateDoc(transactionRef, {
+            // 計算餘額差異並更新錢包餘額
+            const oldTransaction = currentTransactions[transactionIndex];
+            const amountDiff = this.calculateAmountDifference(oldTransaction, { type, amount });
+            
+            // 更新交易記錄
+            currentTransactions[transactionIndex] = {
+                ...oldTransaction,
                 type,
                 amount,
                 note: note || '',
                 date: new Date(dateStr),
                 updatedAt: new Date()
+            };
+
+            // 同時更新錢包餘額和交易記錄
+            const currentWalletAmount = walletDoc.data().amount;
+            await updateDoc(walletRef, { 
+                amount: currentWalletAmount + amountDiff,
+                transactions: currentTransactions
             });
 
             this.hideEditTransactionModal();
@@ -1243,18 +1254,6 @@ class FirebaseWalletManager {
         return newEffect - oldEffect;
     }
 
-    // 更新錢包餘額
-    async updateWalletBalance(walletId, amountChange) {
-        const { doc, updateDoc, getDoc } = window.firestoreModule;
-        const walletRef = doc(window.db, 'users', this.user.uid, 'wallets', walletId);
-        
-        const walletDoc = await getDoc(walletRef);
-        const currentAmount = walletDoc.data().amount;
-        const newAmount = currentAmount + amountChange;
-        
-        await updateDoc(walletRef, { amount: newAmount });
-    }
-
     // 刪除交易
     async deleteTransaction(transaction) {
         if (!confirm(`確定要刪除這筆${transaction.type === 'add' ? '存入' : '提取'}記錄嗎？`)) {
@@ -1262,18 +1261,26 @@ class FirebaseWalletManager {
         }
 
         try {
-            const { doc, deleteDoc } = window.firestoreModule;
-            const transactionRef = doc(
-                window.db, 'users', this.user.uid, 'wallets', 
-                this.currentHistoryWallet, 'transactions', 
-                transaction.id
-            );
-
+            const { doc, updateDoc, getDoc } = window.firestoreModule;
+            const walletRef = doc(window.db, 'users', this.user.uid, 'wallets', this.currentHistoryWallet);
+            
+            // 獲取當前錢包數據
+            const walletDoc = await getDoc(walletRef);
+            const currentTransactions = walletDoc.data().transactions || [];
+            const currentWalletAmount = walletDoc.data().amount;
+            
+            // 移除目標交易記錄
+            const updatedTransactions = currentTransactions.filter(t => t.id !== transaction.id);
+            
             // 恢復錢包餘額（取消這筆交易的影響）
             const amountChange = transaction.type === 'add' ? -transaction.amount : transaction.amount;
-            await this.updateWalletBalance(this.currentHistoryWallet, amountChange);
+            const newAmount = currentWalletAmount + amountChange;
             
-            await deleteDoc(transactionRef);
+            // 更新錢包
+            await updateDoc(walletRef, { 
+                amount: newAmount,
+                transactions: updatedTransactions
+            });
             
             this.showNotification('交易記錄已刪除', 'info');
 
